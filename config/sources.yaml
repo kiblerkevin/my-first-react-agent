@@ -1,0 +1,90 @@
+rss_feeds:
+  - name: "ESPN Chicago"
+    url: "https://www.espn.com/espn/rss/chicago/news"
+    teams: ["bulls", "bears", "cubs", "white_sox", "blackhawks"]
+    enabled: true
+
+  - name: "Chicago Tribune Sports"
+    url: "https://www.chicagotribune.com/sports/rss2.0.xml"
+    teams: ["all"]
+    enabled: true
+
+  - name: "Chicago Sun-Times Sports"
+    url: "https://chicago.suntimes.com/rss/sports/"
+    teams: ["all"]
+    enabled: true
+
+  - name: "Bleacher Report - Chicago"
+    url: "https://bleacherreport.com/chicago-sports.rss"
+    teams: ["all"]
+    enabled: true
+
+apis:
+  newsapi:
+    env_key_name: "NEWSAPI_KEY"
+    enabled: true
+    query: "(Chicago Bulls) OR (Chicago Bears) OR (Chicago Cubs) OR (Chicago White Sox) OR (Chicago Blackhawks) OR (Chicago Fire) OR (Chicago Sky) or (Chicago Stars) or (Chicago Hounds)"
+    language: "en"
+    sort_by: "publishedAt"
+    page_size: 100
+    urL: "https://newsapi.org/v2/everything"
+
+  serpapi:
+    env_key_name: "SERPAPI_KEY"
+    enabled: false
+    query: "Chicago sports news"
+    num_results: 50
+    url: "https://serpapi.com/search?engine=google"
+
+collection:
+  lookback_hours: 48
+  max_articles: 100
+  timeout_seconds: 30
+  retry_attempts: 3
+  retry_delay_seconds: 5
+
+teams:
+  - name: "Chicago Bulls"
+    sport: "basketball"
+    league: "NBA"
+    keywords: ["bulls", "chicago bulls", "nba chicago"]
+
+  - name: "Chicago Bears"
+    sport: "football"
+    league: "NFL"
+    keywords: ["bears", "chicago bears", "nfl chicago"]
+
+  - name: "Chicago Cubs"
+    sport: "baseball"
+    league: "MLB"
+    keywords: ["cubs", "chicago cubs", "mlb chicago", "wrigley"]
+
+  - name: "Chicago White Sox"
+    sport: "baseball"
+    league: "MLB"
+    keywords: ["white sox", "chicago white sox", "sox", "guaranteed rate"]
+
+  - name: "Chicago Blackhawks"
+    sport: "hockey"
+    league: "NHL"
+    keywords: ["blackhawks", "chicago blackhawks", "hawks", "nhl chicago"]
+
+  - name: "Chicago Fire"
+    sport: "soccer"
+    league: "MLS"
+    keywords: ["fire", "chicago fire", "mls chicago"]
+
+  - name: "Chicago Sky"
+    sport: "basketball"
+    league: "WNBA"
+    keywords: ["sky", "chicago sky", "wnba chicago"]
+
+  - name: "Chicago Stars"
+    sport: "soccer"
+    league: "NWSL"
+    keywords: ["stars", "chicago stars", "nwsl chicago"]
+
+  - name: "Chicago Hounds"
+    sport: "rugby"
+    league: "MLR"
+    keywords: ["hounds", "chicago hounds", "mlr chicago"]

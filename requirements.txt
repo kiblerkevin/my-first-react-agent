@@ -1,0 +1,7 @@
+# Agentic
+anthropic>=0.86.0
+pydantic>=2.12.0
+# Python Utils
+python-dotenv>=1.2.0
+# Database
+sqlalchemy>=2.0.0
