@@ -33,6 +33,7 @@ class SerpApiCollector(ApiCollector):
             search = GoogleSearch(params)
             results = search.get_dict()
             articles = results.get("sports_results", [])
+            articles.extend(results.get("news_results", []))
             
             logger.info(f"Collected {len(articles)} articles from SerpAPI.")
         
