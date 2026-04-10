@@ -1,6 +1,6 @@
 from serpapi import GoogleSearch
 
-from utils.article_collectors.api_collector import ApiCollector
+from utils.article_collectors.api_collectors.api_collector import ApiCollector
 from utils.logger.logger import setup_logger
 from constants.enums import ApiSource
 

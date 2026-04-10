@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from utils.logger.logger import setup_logger
 from constants.enums import ApiSource
-from utils.article_collectors.api_collector import APICollector
+from utils.article_collectors.api_collectors.api_collector import APICollector
 
 
 logger = setup_logger(__name__)
