@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime, timedelta
 
 from constants.enums import ApiSource
 from utils.article_collectors.api_collectors.api_collector import APICollector
@@ -17,12 +18,16 @@ class ESPNCollector(APICollector):
 
     def collect_articles(self):
         scores = []
+        date_range = (
+            f"{(datetime.now() - timedelta(days=1)).strftime('%Y%m%d')}"
+            f"-{datetime.now().strftime('%Y%m%d')}"
+        )
 
         for team in self.chicago_teams:
             team_scores = []
             try:
                 url = f"{self.url}/{team['sport']}/{team['league']}/scoreboard"
-                response = requests.get(url, timeout=self.timeout_seconds)
+                response = requests.get(url, params={'dates': date_range}, timeout=self.timeout_seconds)
                 response.raise_for_status()
                 data = response.json()
 
@@ -47,7 +52,7 @@ class ESPNCollector(APICollector):
         return scores
 
     def _parse_score(self, event, competition, competitors, chicago_team_name):
-        status = competition.get('status', {}).get('type', {})
+        status_type = competition.get('status', {}).get('type', {})
 
         home = next((c for c in competitors if c['homeAway'] == 'home'), None)
         away = next((c for c in competitors if c['homeAway'] == 'away'), None)
@@ -55,15 +60,33 @@ class ESPNCollector(APICollector):
         if not home or not away:
             return None
 
+        headline = next(iter(competition.get('headlines', [])), {})
+        game_url = next(
+            (l['href'] for l in event.get('links', []) if 'summary' in l.get('rel', [])),
+            None
+        )
+
         return {
             'team': chicago_team_name,
             'game_id': event.get('id'),
             'date': event.get('date'),
+            'season_type': event.get('season', {}).get('slug'),
+            'status': status_type.get('description'),
+            'status_detail': status_type.get('shortDetail'),
+            'completed': status_type.get('completed', False),
             'home_team': home['team']['displayName'],
             'away_team': away['team']['displayName'],
             'home_score': home.get('score'),
             'away_score': away.get('score'),
-            'status': status.get('description'),
-            'completed': status.get('completed', False),
+            'home_record': next((r['summary'] for r in home.get('records', []) if r.get('type') == 'total'), None),
+            'away_record': next((r['summary'] for r in away.get('records', []) if r.get('type') == 'total'), None),
+            'home_hits': home.get('hits'),
+            'away_hits': away.get('hits'),
+            'home_errors': home.get('errors'),
+            'away_errors': away.get('errors'),
             'venue': competition.get('venue', {}).get('fullName'),
+            'neutral_site': competition.get('neutralSite', False),
+            'headline': headline.get('description'),
+            'short_link_text': headline.get('shortLinkText'),
+            'game_url': game_url,
         }
