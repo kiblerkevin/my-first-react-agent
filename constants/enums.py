@@ -2,7 +2,8 @@ from enum import Enum
 
 class ApiSource(Enum):
     NEWSAPI = 'newsapi'
-    SERPAPI ='serpapi'
+    SERPAPI = 'serpapi'
+    ESPNAPI = 'espnapi'
     
 class RssSource(Enum):
     ESPN = 'espn'

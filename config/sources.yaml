@@ -34,6 +34,44 @@ apis:
     page_size: 100
     url: "https://newsapi.org/v2/everything"
 
+  espnapi:
+    env_key_name: null
+    enabled: true
+    url: "https://site.api.espn.com/apis/site/v2/sports"
+    chicago_teams:
+      - name: "Chicago Bears"
+        sport: "football"
+        league: "nfl"
+        team_id: 3
+      - name: "Chicago Bulls"
+        sport: "basketball"
+        league: "nba"
+        team_id: 4
+      - name: "Chicago Cubs"
+        sport: "baseball"
+        league: "mlb"
+        team_id: 16
+      - name: "Chicago White Sox"
+        sport: "baseball"
+        league: "mlb"
+        team_id: 4
+      - name: "Chicago Blackhawks"
+        sport: "hockey"
+        league: "nhl"
+        team_id: 4
+      - name: "Chicago Fire FC"
+        sport: "soccer"
+        league: "usa.1"
+        team_id: 182
+      - name: "Chicago Sky"
+        sport: "basketball"
+        league: "wnba"
+        team_id: 19
+      - name: "Chicago Stars FC"
+        sport: "soccer"
+        league: "usa.nwsl"
+        team_id: 15360
+
   serpapi:
     env_key_name: "SERPAPI_KEY"
     enabled: false

@@ -16,8 +16,7 @@ class APICollector:
         
         with open(config_path, 'r') as file:
             self.config = yaml.safe_load(file)
-        env_key_name = self.config['apis'][api_value]['env_key_name']
-        self.api_key = os.getenv(self.config['apis'][api_value]['env_key_name'])
+        self.api_key = self.config['apis'][api_value].get('api_key_env_var', None)
         self.language = self.config['apis'][api_value].get('language', None)
         self.lookback_hours = self.config['collection']['lookback_hours']
         self.page_size = self.config['apis'][api_value].get('page_size', None)
