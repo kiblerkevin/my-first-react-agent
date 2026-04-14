@@ -1,36 +1,27 @@
-from utils.article_collectors.api_collectors.newsapi_collector import NewsAPI_Collector
-from utils.article_collectors.api_collectors.serpapi_collector import SerpApiCollector
-from utils.article_collectors.api_collectors.espn_collector import ESPNCollector
+from agent.base_agent import BaseAgent
+from agent.claude_client import ClaudeClient
+from agent.context_window import ContextWindow
+from tools.fetch_articles_tool import FetchArticlesTool
+
+SYSTEM_PROMPT = (
+    "You are a Chicago sports news assistant. "
+    "When asked about recent Chicago sports news or articles, use the fetch_articles tool to retrieve them."
+)
+
 
 def main():
+    context = ContextWindow(conversation_history=[])
+    client = ClaudeClient(system_prompt=SYSTEM_PROMPT)
 
-    articles = []
+    fetch_tool = FetchArticlesTool()
 
-    # Collect articles from NewsAPI
-    newsapi_collector = NewsAPI_Collector()
-    newsapi_articles = newsapi_collector.collect_articles()
-    articles.extend(newsapi_articles)
+    agent = BaseAgent(context=context, claude_client=client)
+    agent.tools = {fetch_tool.name: fetch_tool}
 
-    # Collect articles from SerpApi
-    serpapi_collector = SerpApiCollector()
-    serpapi_articles = serpapi_collector.collect_articles()
-    articles.extend(serpapi_articles)
+    print("Sending message to agent...")
+    response = agent.send_message("Fetch the latest Chicago sports articles.")
+    print(f"\nAgent response:\n{response}")
 
-    print(f"Total articles collected: {len(articles)}")
-    for article in articles:
-        print(f"Title: {article.get('title')}")
-        print(f"URL: {article.get('url')}")
-        print(f"Published At: {article.get('publishedAt')}")
-        print("-" * 80)
-
-    # Collect scores from ESPN
-    espn_collector = ESPNCollector()
-    scores = espn_collector.collect_articles()
-
-    print(f"\nTotal scores collected: {len(scores)}")
-    for score in scores:
-        print(f"{score['away_team']} {score['away_score']} @ {score['home_team']} {score['home_score']} ({score['status']})")
-        print("-" * 80)
 
 if __name__ == "__main__":
     main()

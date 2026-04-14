@@ -18,6 +18,7 @@ CONFIG_PATH = 'config/sources.yaml'
 
 class FetchArticlesTool(BaseTool):
     model_config = {"arbitrary_types_allowed": True, "extra": "allow"}
+    input_model: type = FetchArticlesInput
     name: str = "fetch_articles"
     description: str = (
         "Fetches the latest Chicago sports news articles from NewsAPI and SerpAPI for the past 24 hours. "

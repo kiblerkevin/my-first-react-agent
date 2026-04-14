@@ -30,7 +30,11 @@ class BaseAgent:
     def act(self) -> str:
         response = self.claude_client.send_messages_with_tools(
             messages=[msg.model_dump() for msg in self.context.conversation_history],
-            tools=[tool.model_dump() for tool in self.tools]
+            tools=[{
+                    "name": tool.name,
+                    "description": tool.description,
+                    "input_schema": tool.input_schema
+                } for tool in self.tools.values()]
         )
         
         tool_use_id = 1
@@ -62,10 +66,12 @@ class BaseAgent:
             # Make another API call to continue the conversation
             return self.act()
         
+        return response.content[0].text if response.content else ""
     def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
         try:
             tool = self.tools[tool_name]
-            result = tool.execute(tool_input)
+            parsed_input = tool.input_model.model_validate(tool_input)
+            result = tool.execute(parsed_input)
             return json.dumps(result.model_dump())
         except KeyError:
             return f"Tool {tool_name} not found."
