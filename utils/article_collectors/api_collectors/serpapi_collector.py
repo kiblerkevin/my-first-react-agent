@@ -37,7 +37,7 @@ class SerpApiCollector(APICollector):
                     if iso_date and datetime.fromisoformat(iso_date.replace('Z', '+00:00')) < cutoff:
                         continue
                     seen_urls.add(url)
-                    articles.append(self._parse_article(item))
+                    articles.append(self._parse_article(item, team['name']))
                     team_count += 1
 
                 logger.info(f"Collected {team_count} articles for {team['name']} from SerpAPI.")
@@ -48,12 +48,11 @@ class SerpApiCollector(APICollector):
         logger.info(f"Collected {len(articles)} total deduplicated articles from SerpAPI.")
         return articles
 
-    def _parse_article(self, item):
+    def _parse_article(self, item, team):
         return {
             'title': item.get('title'),
-            'description': item.get('title'),
-            'content': item.get('title'),
             'url': item.get('link'),
             'publishedAt': item.get('iso_date'),
-            'source': item.get('source', {}).get('name')
+            'source': item.get('source', {}).get('name'),
+            'team': team
         }

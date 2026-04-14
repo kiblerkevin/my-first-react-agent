@@ -44,7 +44,7 @@ class NewsAPI_Collector(APICollector):
                     url = item.get('url')
                     if url in seen_urls:
                         continue
-                    article = self._parse_article(item)
+                    article = self._parse_article(item, team['name'])
                     if article:
                         seen_urls.add(url)
                         articles.append(article)
@@ -59,7 +59,7 @@ class NewsAPI_Collector(APICollector):
         return articles
     
     
-    def _parse_article(self, item):
+    def _parse_article(self, item, team):
         if not item.get('content') or item.get('content') == 'Removed':
             content = item.get('description', '')
         else:
@@ -70,9 +70,8 @@ class NewsAPI_Collector(APICollector):
         
         return {
             'title': item.get('title'),
-            'description': item.get('description'),
-            'content': content,
             'url': item.get('url'),
             'publishedAt': item.get('publishedAt'),
-            'source': item.get('source', {}).get('name')
+            'source': item.get('source', {}).get('name'),
+            'team': team
         }

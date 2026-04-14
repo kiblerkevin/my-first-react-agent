@@ -1,3 +1,5 @@
+import json
+
 from agent.claude_client import ClaudeClient
 from agent.context_window import ContextWindow
 from agent.context_window import (
@@ -64,11 +66,11 @@ class BaseAgent:
         try:
             tool = self.tools[tool_name]
             result = tool.execute(tool_input)
+            return json.dumps(result.model_dump())
         except KeyError:
             return f"Tool {tool_name} not found."
         except Exception as e:
             return f"Error executing tool {tool_name}: {str(e)}"
-        return result.get("output", "No output defined in tool result.")
     
     def _print_tool_use(self, tool_use: ToolUse):
         print(

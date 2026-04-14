@@ -77,10 +77,43 @@ apis:
 
 collection:
   lookback_hours: 24
-  max_articles: 100
+  max_articles_per_source: 100
   timeout_seconds: 30
   retry_attempts: 3
   retry_delay_seconds: 5
+
+relevance_scoring:
+  weights:
+    recency: 0.35
+    source_credibility: 0.25
+    team_keyword_density: 0.25
+    content_signals: 0.15
+  credible_sources:
+    - "ESPN"
+    - "MLB.com"
+    - "NBA.com"
+    - "NHL.com"
+    - "Chicago Tribune"
+    - "Chicago Sun-Times"
+    - "Bleacher Report"
+    - "The Athletic"
+    - "CBS Sports"
+    - "NBC Sports"
+    - "Sports Illustrated"
+    - "Yahoo Sports"
+    - "Associated Press"
+  content_signal_keywords:
+    - "recap"
+    - "score"
+    - "highlights"
+    - "final"
+    - "win"
+    - "loss"
+    - "game"
+    - "match"
+    - "result"
+    - "victory"
+    - "defeat"
 
 teams:
   - name: "Chicago Bulls"

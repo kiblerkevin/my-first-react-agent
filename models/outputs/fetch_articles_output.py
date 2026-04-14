@@ -1,10 +1,12 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 class FetchArticlesOutput(BaseModel):
     """Output schema for fetch_articles tool"""
-    articles: list[dict] = Field(description="List of collected sports article.")
-    article_count: int = Field(description="Number of articles collected.")
-    source_counts: dict[str, int] = Field(description="Counts of articles by source.")
-    new_articles: list[dict] = Field(description="List of new articles collected since last fetch.")
-    new_article_count: int = Field(description="Number of new articles collected since last fetch.")
-    filtered_article_count: int = Field(description="Articles filtered by memory")
+    articles: list[dict] = Field(default_factory=list, description="List of collected sports articles, each with title, url, publishedAt, source, team, and relevance_score.")
+    article_count: int = Field(default=0, description="Total number of articles returned after deduplication, scoring, and trimming.")
+    source_counts: dict[str, int] = Field(default_factory=dict, description="Number of articles returned per source after trimming.")
+    errors: list[str] = Field(default_factory=list, description="Errors encountered per source during collection. Non-empty indicates partial results.")
+    new_articles: list[dict] = Field(default_factory=list, description="Articles not previously seen in memory. Populated once memory layer is active.")
+    new_article_count: int = Field(default=0, description="Number of new articles not previously seen. Populated once memory layer is active.")
+    filtered_article_count: int = Field(default=0, description="Number of articles filtered out by memory as previously seen. Populated once memory layer is active.")
