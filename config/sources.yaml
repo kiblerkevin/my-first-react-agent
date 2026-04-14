@@ -27,8 +27,6 @@ apis:
   newsapi:
     env_key_name: "NEWSAPI_KEY"
     enabled: true
-    old_query: "(Chicago Bulls) OR (Chicago Bears) OR (Chicago Cubs) OR (Chicago White Sox) OR (Chicago Blackhawks) OR (Chicago Fire) OR (Chicago Sky) or (Chicago Stars) or (Chicago Hounds)"
-    query: "Chicago sports news -betting -odds -parlay -gambling"
     language: "en"
     sort_by: "publishedAt"
     page_size: 100
@@ -75,12 +73,10 @@ apis:
   serpapi:
     env_key_name: "SERPAPI_KEY"
     enabled: false
-    query: "Chicago sports news"
-    num_results: 50
     url: "https://serpapi.com/search?engine=google"
 
 collection:
-  lookback_hours: 48
+  lookback_hours: 24
   max_articles: 100
   timeout_seconds: 30
   retry_attempts: 3

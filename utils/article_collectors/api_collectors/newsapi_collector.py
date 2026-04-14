@@ -11,44 +11,51 @@ logger = setup_logger(__name__)
 
 
 API_SOURCE = ApiSource.NEWSAPI.value
+EXCLUSION_TERMS = "-betting -odds -gambling"
 
-NEWSAPI_QUERY = "(Chicago Bears OR Chicago Cubs OR Chicago White Sox OR Chicago Bulls OR Chicago Blackhawks OR Chicago Sky OR Chicago Fire FC OR Chicago Stars FC OR Chicago Hounds OR Chicago Wolves) -betting -odds -parlay -gambling -casino -picks -spread -lines -sportsbook"
-q = "Chicago sports scores -betting -odds -gambling-spread -lines"
 
 class NewsAPI_Collector(APICollector):
     def __init__(self):
         super().__init__(API_SOURCE)
+        self.teams = self.config['teams']
 
     def collect_articles(self):
+        seen_urls = set()
         articles = []
-        
-        try:
-            from_date = (datetime.now() - timedelta(hours=self.lookback_hours)).isoformat()
-            
-            params = {
-                'q': q,
-                'language': self.language,
-                'sortBy': self.sort_by,
-                'pageSize': self.page_size,
-                'from': from_date,
-                'apiKey': self.api_key
-            }
-            
-            response = requests.get(self.url, params=params, timeout=self.timeout_seconds)
-            print(f"Response: {response.status_code} - {response.text}")  # Debugging line
-            response.raise_for_status()
-            data = response.json()
-            
-            for item in data.get('articles', []):
-                article = self._parse_article(item)
-                if article:
-                    articles.append(article)
-                    
-            logger.info(f"Collected {len(articles)} articles from NewsAPI.")
-            
-        except Exception as e:
-            logger.error(f"Error occurred while collecting articles: {e}")
+        from_date = (datetime.now() - timedelta(hours=self.lookback_hours)).isoformat()
 
+        for team in self.teams:
+            try:
+                params = {
+                    'q': f'"{team["name"]}" {EXCLUSION_TERMS}',
+                    'language': self.language,
+                    'sortBy': self.sort_by,
+                    'pageSize': self.page_size,
+                    'from': from_date,
+                    'apiKey': self.api_key
+                }
+
+                response = requests.get(self.url, params=params, timeout=self.timeout_seconds)
+                response.raise_for_status()
+                data = response.json()
+
+                team_count = 0
+                for item in data.get('articles', []):
+                    url = item.get('url')
+                    if url in seen_urls:
+                        continue
+                    article = self._parse_article(item)
+                    if article:
+                        seen_urls.add(url)
+                        articles.append(article)
+                        team_count += 1
+
+                logger.info(f"Collected {team_count} articles for {team['name']} from NewsAPI.")
+
+            except Exception as e:
+                logger.error(f"Error collecting NewsAPI articles for {team['name']}: {e}")
+
+        logger.info(f"Collected {len(articles)} total deduplicated articles from NewsAPI.")
         return articles
     
     
