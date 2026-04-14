@@ -24,7 +24,6 @@ class SerpApiCollector(ApiCollector):
             "engine": "google_news",
             "api_key": self.api_key,
             "q": SERPAPI_QUERY,
-            "gl": self.geolocation,
             "hl": self.language,
             "as_qdr": f"h{self.lookback_hours}",
         }

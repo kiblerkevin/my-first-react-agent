@@ -1,20 +1,24 @@
 rss_feeds:
-  - name: "ESPN Chicago"
+  espn:
+    name: "ESPN Chicago"
     url: "https://www.espn.com/espn/rss/chicago/news"
     teams: ["bulls", "bears", "cubs", "white_sox", "blackhawks"]
     enabled: true
 
-  - name: "Chicago Tribune Sports"
-    url: "https://www.chicagotribune.com/sports/rss2.0.xml"
+  chicago_tribune:
+    name: "Chicago Tribune Sports"
+    url: "https://www.chicagotribune.com/arc/outboundfeeds/rss/section/sports/&sort=display_date:desc"
     teams: ["all"]
     enabled: true
 
-  - name: "Chicago Sun-Times Sports"
+  chicago_sun_times:
+    name: "Chicago Sun-Times Sports"
     url: "https://chicago.suntimes.com/rss/sports/"
     teams: ["all"]
     enabled: true
 
-  - name: "Bleacher Report - Chicago"
+  bleacher_report:
+    name: "Bleacher Report - Chicago"
     url: "https://bleacherreport.com/chicago-sports.rss"
     teams: ["all"]
     enabled: true
