@@ -23,11 +23,12 @@ apis:
   newsapi:
     env_key_name: "NEWSAPI_KEY"
     enabled: true
-    query: "(Chicago Bulls) OR (Chicago Bears) OR (Chicago Cubs) OR (Chicago White Sox) OR (Chicago Blackhawks) OR (Chicago Fire) OR (Chicago Sky) or (Chicago Stars) or (Chicago Hounds)"
+    old_query: "(Chicago Bulls) OR (Chicago Bears) OR (Chicago Cubs) OR (Chicago White Sox) OR (Chicago Blackhawks) OR (Chicago Fire) OR (Chicago Sky) or (Chicago Stars) or (Chicago Hounds)"
+    query: "Chicago sports news -betting -odds -parlay -gambling"
     language: "en"
     sort_by: "publishedAt"
     page_size: 100
-    urL: "https://newsapi.org/v2/everything"
+    url: "https://newsapi.org/v2/everything"
 
   serpapi:
     env_key_name: "SERPAPI_KEY"

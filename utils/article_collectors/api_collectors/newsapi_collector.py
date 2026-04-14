@@ -13,7 +13,7 @@ logger = setup_logger(__name__)
 API_SOURCE = ApiSource.NEWSAPI.value
 
 NEWSAPI_QUERY = "(Chicago Bears OR Chicago Cubs OR Chicago White Sox OR Chicago Bulls OR Chicago Blackhawks OR Chicago Sky OR Chicago Fire FC OR Chicago Stars FC OR Chicago Hounds OR Chicago Wolves) -betting -odds -parlay -gambling -casino -picks -spread -lines -sportsbook"
-
+q = "Chicago sports scores -betting -odds -gambling-spread -lines"
 
 class NewsAPI_Collector(APICollector):
     def __init__(self):
@@ -26,7 +26,7 @@ class NewsAPI_Collector(APICollector):
             from_date = (datetime.now() - timedelta(hours=self.lookback_hours)).isoformat()
             
             params = {
-                'q': self.config['apis'][API_SOURCE]['query'],
+                'q': q,
                 'language': self.language,
                 'sortBy': self.sort_by,
                 'pageSize': self.page_size,
@@ -35,6 +35,7 @@ class NewsAPI_Collector(APICollector):
             }
             
             response = requests.get(self.url, params=params, timeout=self.timeout_seconds)
+            print(f"Response: {response.status_code} - {response.text}")  # Debugging line
             response.raise_for_status()
             data = response.json()
             
