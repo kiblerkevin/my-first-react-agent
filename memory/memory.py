@@ -1,6 +1,6 @@
 import yaml
 
-from memory.database import init_db, get_session, Category, Tag, PendingApproval
+from memory.database import init_db, get_session, Category, Tag, PendingApproval, OAuthToken
 from utils.logger.logger import setup_logger
 
 
@@ -135,5 +135,56 @@ class Memory:
                 PendingApproval.expires_at < datetime.utcnow()
             ).all()
             return [{'token': a.token, 'blog_title': a.blog_title} for a in expired]
+        finally:
+            session.close()
+
+    def update_category_wordpress_id(self, name: str, wordpress_id: int):
+        session = get_session(self.engine)
+        try:
+            category = session.query(Category).filter_by(name=name).first()
+            if category:
+                category.wordpress_id = wordpress_id
+                session.commit()
+                logger.info(f"Updated category '{name}' wordpress_id={wordpress_id}")
+        finally:
+            session.close()
+
+    def update_tag_wordpress_id(self, name: str, wordpress_id: int):
+        session = get_session(self.engine)
+        try:
+            tag = session.query(Tag).filter_by(name=name).first()
+            if tag:
+                tag.wordpress_id = wordpress_id
+                session.commit()
+                logger.info(f"Updated tag '{name}' wordpress_id={wordpress_id}")
+        finally:
+            session.close()
+
+    def save_oauth_token(self, service: str, access_token: str, blog_id: str = None, blog_url: str = None):
+        session = get_session(self.engine)
+        try:
+            token = session.query(OAuthToken).filter_by(service=service).first()
+            if token:
+                token.access_token = access_token
+                token.blog_id = blog_id
+                token.blog_url = blog_url
+            else:
+                token = OAuthToken(
+                    service=service,
+                    access_token=access_token,
+                    blog_id=blog_id,
+                    blog_url=blog_url
+                )
+                session.add(token)
+            session.commit()
+            logger.info(f"Saved OAuth token for {service}")
+        finally:
+            session.close()
+
+    def get_oauth_token(self, service: str) -> str | None:
+        session = get_session(self.engine)
+        try:
+            token = session.query(OAuthToken).filter_by(service=service).first()
+            return token.access_token if token else None
         finally:
             session.close()

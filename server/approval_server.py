@@ -3,7 +3,7 @@ import sys
 import json
 
 import yaml
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template_string, redirect
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -11,6 +11,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from memory.memory import Memory
+from tools.wordpress_publish_tool import WordPressPublishTool
+from models.inputs.wordpress_publish_input import WordPressPublishInput
 from utils.logger.logger import setup_logger
 
 
@@ -22,6 +24,12 @@ ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 app = Flask(__name__)
 memory = Memory()
 
+WP_CLIENT_ID = os.getenv('WORDPRESS_CLIENT_ID')
+WP_CLIENT_SECRET = os.getenv('WORDPRESS_CLIENT_SECRET')
+WP_REDIRECT_URI = os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000') + '/oauth/callback'
+WP_AUTHORIZE_URL = 'https://public-api.wordpress.com/oauth2/authorize'
+WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'
+
 
 # --- HTML Templates ---
 
@@ -29,6 +37,7 @@ APPROVED_PAGE = """
 <html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
 <h1 style="color: #28a745;">✅ Blog Post Approved</h1>
 <p><strong>{{ title }}</strong> has been approved and will be published shortly.</p>
+{{ post_info|safe }}
 </body></html>
 """
 
@@ -84,8 +93,74 @@ STATUS_PAGE = """
 </body></html>
 """
 
+OAUTH_SUCCESS_PAGE = """
+<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+<h1 style="color: #28a745;">✅ WordPress Authorized</h1>
+<p>OAuth token saved. The approval server can now publish to WordPress.</p>
+<p><strong>Blog:</strong> {{ blog_url }}</p>
+</body></html>
+"""
 
-# --- Routes ---
+OAUTH_ERROR_PAGE = """
+<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+<h1 style="color: #dc3545;">OAuth Error</h1>
+<p>{{ error }}</p>
+</body></html>
+"""
+
+
+# --- OAuth Routes ---
+
+@app.route('/oauth/start')
+def oauth_start():
+    params = {
+        'client_id': WP_CLIENT_ID,
+        'redirect_uri': WP_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'global'
+    }
+    auth_url = f"{WP_AUTHORIZE_URL}?" + "&".join(f"{k}={v}" for k, v in params.items())
+    return redirect(auth_url)
+
+
+@app.route('/oauth/callback')
+def oauth_callback():
+    code = request.args.get('code')
+    error = request.args.get('error')
+
+    if error:
+        return render_template_string(OAUTH_ERROR_PAGE, error=error), 400
+
+    if not code:
+        return render_template_string(OAUTH_ERROR_PAGE, error='No authorization code received.'), 400
+
+    try:
+        import requests as req
+        response = req.post(WP_TOKEN_URL, data={
+            'client_id': WP_CLIENT_ID,
+            'client_secret': WP_CLIENT_SECRET,
+            'redirect_uri': WP_REDIRECT_URI,
+            'code': code,
+            'grant_type': 'authorization_code'
+        })
+        response.raise_for_status()
+        data = response.json()
+
+        access_token = data.get('access_token')
+        blog_id = str(data.get('blog_id', ''))
+        blog_url = data.get('blog_url', '')
+
+        memory.save_oauth_token('wordpress', access_token, blog_id=blog_id, blog_url=blog_url)
+        logger.info(f"WordPress OAuth token saved for blog: {blog_url}")
+
+        return render_template_string(OAUTH_SUCCESS_PAGE, blog_url=blog_url)
+
+    except Exception as e:
+        logger.error(f"OAuth callback error: {e}")
+        return render_template_string(OAUTH_ERROR_PAGE, error=str(e)), 500
+
+
+# --- Approval Routes ---
 
 @app.route('/approve/<token>')
 def approve(token):
@@ -99,12 +174,31 @@ def approve(token):
     memory.update_approval_status(token, 'approved')
     logger.info(f"Blog post approved: {approval['blog_title']}")
 
-    # TODO: Trigger WordPress publish tool here in production
-    # from tools.wordpress_publish_tool import WordPressPublishTool
-    # publish_tool = WordPressPublishTool()
-    # publish_tool.execute(...)
+    # Trigger WordPress publish
+    publish_result = None
+    try:
+        taxonomy = json.loads(approval.get('taxonomy_data', '{}'))
+        publish_tool = WordPressPublishTool()
+        publish_result = publish_tool.execute(WordPressPublishInput(
+            title=approval['blog_title'],
+            content=approval['blog_content'],
+            excerpt=approval.get('blog_excerpt', ''),
+            categories=taxonomy.get('categories', []),
+            tags=taxonomy.get('tags', [])
+        ))
+        if publish_result.error:
+            logger.error(f"WordPress publish error: {publish_result.error}")
+        else:
+            logger.info(f"Published to WordPress: post_id={publish_result.post_id}")
+    except Exception as e:
+        logger.error(f"Error triggering WordPress publish: {e}")
 
-    return render_template_string(APPROVED_PAGE, title=approval['blog_title'])
+    title = approval['blog_title']
+    post_info = ""
+    if publish_result and publish_result.post_id:
+        post_info = f"<p>WordPress draft created: <a href='{publish_result.post_url}'>{publish_result.post_url}</a></p>"
+
+    return render_template_string(APPROVED_PAGE, title=title, post_info=post_info)
 
 
 @app.route('/reject/<token>', methods=['GET', 'POST'])

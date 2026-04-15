@@ -18,25 +18,29 @@
                           - Flask approval server (server/approval_server.py) handles callbacks
                           - APScheduler background thread auto-archives expired approvals (24h)
                           - Reject flow includes optional feedback form
+10. WordPress publish   — OAuth2 bearer token auth via WordPress.com API:
+                          - One-time /oauth/start flow stores token in local DB
+                          - Resolves category/tag names to WordPress IDs (create-if-missing)
+                          - Creates draft post via WP REST API v2
+                          - Triggered by approval callback in Flask server or directly in main.py
 
-## Remaining 🔲
-10. WordPress publish   — POST approved draft to WordPress using credentials in .env;
-                          called from Flask server on approval callback; resolve wordpress_id
-                          for categories and tags via WordPress REST API
-11. Email notification  — Send confirmation email via SMTP after publishing
+## Workflow Complete ✅
+All core workflow steps are implemented. The human publishes the draft manually
+from the WordPress dashboard after approving via email.
+
+## Future Enhancements 🔮
+- [ ] Memory layer — article deduplication across runs, prevent re-summarizing previously seen articles
+- [ ] Embeddings/cosine similarity — replace fuzzy title matching with semantic deduplication
+- [ ] Revision loop as tool vs orchestration — revisit after memory layer is implemented
+- [ ] Email notification — optional confirmation email after human publishes (removed from core workflow)
+- [ ] Scheduler — automate daily workflow execution via cron or APScheduler
 
 ## Notes
-- Memory/database layer started — Memory class in memory.py with category, tag, and
-  pending approval CRUD methods
-- Full memory layer (article deduplication across runs) still deferred
-- Embeddings/cosine similarity deferred to memory layer implementation
+- Memory/database layer started — Memory class in memory.py with category, tag,
+  pending approval, and OAuth token CRUD methods
 - Deduplication method: fuzzy string matching on titles using rapidfuzz
 - deduplicate_articles runs before summarize_article in the workflow
 - refined_excerpt produced during revision loop, not by evaluate_blog_post
-- Agent determines whether to proceed to publishing based on overall_score across evaluation runs
-- Revision loop kept in main.py (orchestration) rather than as a tool
 - Flask server must be started separately: python server/approval_server.py
 - Gmail App Password required for SMTP (not regular account password)
-
-## Design Decisions to Revisit
-- [ ] Revision loop as tool vs orchestration — revisit after memory layer is implemented
+- WordPress.com OAuth2 required — run /oauth/start once to authorize

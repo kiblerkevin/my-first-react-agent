@@ -9,6 +9,7 @@ from models.inputs.deduplicate_articles_input import DeduplicateArticlesInput
 from models.inputs.evaluate_blog_post_input import EvaluateBlogPostInput
 from models.inputs.create_blog_taxonomy_input import CreateBlogTaxonomyInput
 from models.inputs.send_approval_email_input import SendApprovalEmailInput
+from models.inputs.wordpress_publish_input import WordPressPublishInput
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
@@ -17,6 +18,7 @@ from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.evaluate_blog_post_tool import EvaluateBlogPostTool
 from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
 from tools.send_approval_email_tool import SendApprovalEmailTool
+from tools.wordpress_publish_tool import WordPressPublishTool
 
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
@@ -37,6 +39,7 @@ def main():
     evaluate_tool = EvaluateBlogPostTool()
     taxonomy_tool = CreateBlogTaxonomyTool()
     approval_tool = SendApprovalEmailTool()
+    publish_tool = WordPressPublishTool()
 
     # Step 1: Fetch scores
     print("--- Step 1: Fetch Scores ---")
@@ -189,6 +192,25 @@ def main():
         print(f"Error:      {approval_result.error}")
     print("\nWorkflow complete. Awaiting human approval via email.")
     print("Start the approval server with: python server/approval_server.py")
+
+    # Step 9: WordPress publish (testing only — in production this is triggered by approval callback)
+    print("\n--- Step 9: WordPress Publish (test) ---")
+    publish_result = publish_tool.execute(WordPressPublishInput(
+        title=best_draft.title,
+        content=best_draft.content,
+        excerpt=best_draft.excerpt,
+        categories=taxonomy.categories,
+        tags=taxonomy.tags
+    ))
+
+    if publish_result.error:
+        print(f"Error: {publish_result.error}")
+    else:
+        print(f"Post ID:    {publish_result.post_id}")
+        print(f"Post URL:   {publish_result.post_url}")
+        print(f"Status:     {publish_result.status}")
+    print(f"Categories: {publish_result.categories_resolved}")
+    print(f"Tags:       {publish_result.tags_resolved}")
 
 
 if __name__ == "__main__":

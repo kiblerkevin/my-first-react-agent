@@ -116,6 +116,17 @@ class PendingApproval(Base):
     summaries_data = Column(Text, nullable=True)  # JSON string
     scores_data = Column(Text, nullable=True)  # JSON string
     feedback = Column(Text, nullable=True)
+
+
+class OAuthToken(Base):
+    __tablename__ = 'oauth_tokens'
+
+    id = Column(Integer, primary_key=True)
+    service = Column(String(50), nullable=False, unique=True)  # e.g. 'wordpress'
+    access_token = Column(Text, nullable=False)
+    blog_id = Column(String(100), nullable=True)
+    blog_url = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
     
     
 def get_engine(db_path='data/articles.db'):
