@@ -5,11 +5,13 @@ from models.inputs.fetch_scores_input import FetchScoresInput
 from models.inputs.summarize_article_input import SummarizeArticleInput
 from models.inputs.create_blog_draft_input import CreateBlogDraftInput
 from models.inputs.deduplicate_articles_input import DeduplicateArticlesInput
+from models.inputs.evaluate_blog_post_input import EvaluateBlogPostInput
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
 from tools.create_blog_draft_tool import CreateBlogDraftTool
 from tools.deduplicate_articles_tool import DeduplicateArticlesTool
+from tools.evaluate_blog_post_tool import EvaluateBlogPostTool
 
 MAX_ARTICLES_PER_TEAM = 2
 
@@ -20,6 +22,7 @@ def main():
     summarize_tool = SummarizeArticleTool()
     draft_tool = CreateBlogDraftTool()
     deduplicate_tool = DeduplicateArticlesTool()
+    evaluate_tool = EvaluateBlogPostTool()
 
     # Step 1: Fetch scores
     print("--- Step 1: Fetch Scores ---")
@@ -82,6 +85,26 @@ def main():
     print(f"Articles used: {draft.article_count}")
     print(f"Excerpt:       {draft.excerpt}")
     print(f"\nContent preview (first 1000 chars):\n{draft.content[:1000]}")
+
+    # Step 6: Evaluate blog post
+    print("\n--- Step 6: Evaluate Blog Post ---")
+    evaluation = evaluate_tool.execute(EvaluateBlogPostInput(
+        title=draft.title,
+        content=draft.content,
+        excerpt=draft.excerpt,
+        summaries=summaries,
+        scores=scores_output.scores
+    ))
+
+    print(f"Evaluation ID:  {evaluation.evaluation_id}")
+    print(f"Overall score:  {evaluation.overall_score}/10")
+    print("Criteria scores:")
+    for criterion, score in evaluation.criteria_scores.items():
+        print(f"  {criterion:<14} {score}/10 — {evaluation.criteria_reasoning.get(criterion, '')}")
+    print("Improvement suggestions:")
+    for criterion, suggestions in evaluation.improvement_suggestions.items():
+        for suggestion in suggestions:
+            print(f"  [{criterion}] {suggestion}")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,11 @@ claude_summarizer:
   temperature: 0.1
   max_tokens: 512
 
+claude_evaluator:
+  model: "claude-sonnet-4-5"
+  temperature: 0.1
+  max_tokens: 2048
+
 claude_drafter:
   model: "claude-sonnet-4-5"
   temperature: 0.5

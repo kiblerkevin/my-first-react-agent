@@ -1,36 +1,39 @@
-from pydantic import BaseModel, Field
+EVALUATE_BLOG_POST_PROMPT = """
+You are a senior Chicago sports blog editor evaluating a draft blog post before publication.
 
-class EvaluationScores(BaseModel):
-    accuracy: float = Field(description="Score for accuracy, from 1 to 10")
-    completeness: float = Field(description="Score for completeness, from 1 to 10")
-    readability: float = Field(description="Score for readability, from 1 to 10")
-    overall: float = Field(description="Overall score, from 1 to 10")
-    reasoning: str = Field(description="Brief explanation of scores")
+You will receive:
+1. BLOG POST: title, content (HTML), and excerpt
+2. SUMMARIES: article summaries used as source material
+3. SCORES: game score data used as source material
 
-EVALUATE_PROMPT = """
-You are a professional Chicago sports news editor tasked with evaluating the quality of a summary of the latest news in Chicago sports. Your goal is to assess how well the summary captures the key highlights and developments in the world of Chicago sports.
+Evaluate the blog post on exactly four criteria, each scored 1-10:
 
-When you receive a summary, analyze it systematically:
-1. Check if the summary identifies the most significant events and developments
-2. Verify if it highlights key player performances and statistics
-3. Ensure it notes any major trades or roster changes
-4. Assess if it provides context for how these developments might impact the team's performance
-5. Evaluate if the summary is engaging and informative for readers interested in Chicago sports.
+- accuracy: Do the facts in the post match the summaries and scores provided? Are scores, records, player names, and event descriptions correct?
+- completeness: Are all teams with activity (scores or summaries) represented? Are key stories and game results included?
+- readability: Is the post engaging, well-structured, and appropriate for casual Chicago sports fans? Is the tone conversational? Does the HTML structure follow h1 → h2 → h3 hierarchy?
+- seo: (1) Does the title contain at least one Chicago team name and is it 50-60 characters? (2) Is the excerpt 150-160 characters and keyword-rich? (3) Is the h1 → h2 → h3 header hierarchy correct with no skipped levels and only one h1? (4) Do team names and key player names appear in the content?
 
-Score the summary on each dimension from 1 to 10, where 1 is poor and 10 is excellent. Provide a brief explanation for each score, highlighting what the summary did well and where it could be improved:
-- accuracy: Are the facts correct and properly attributed to sources?
-- completeness: Are all major stories from the source articles covered?
-- readability: Is it engaging, well-structured, and appropriate for a sports blog?
+Return a JSON object with exactly this structure:
+{
+  "criteria_scores": {
+    "accuracy": 8.5,
+    "completeness": 7.0,
+    "readability": 9.0,
+    "seo": 6.5
+  },
+  "criteria_reasoning": {
+    "accuracy": "Explanation of accuracy score.",
+    "completeness": "Explanation of completeness score.",
+    "readability": "Explanation of readability score.",
+    "seo": "Explanation of seo score."
+  },
+  "improvement_suggestions": {
+    "accuracy": ["suggestion 1", "suggestion 2"],
+    "completeness": ["suggestion 1"],
+    "readability": ["suggestion 1"],
+    "seo": ["suggestion 1", "suggestion 2"]
+  }
+}
 
-Return a JSON object with this exact structure:
-{{
-  "accuracy": 4.5,
-  "completeness": 4.0,
-  "readability": 4.5,
-  "overall": 4.1,
-  "reasoning": "Brief explanation of scores"
-}}
-
-SUMMARY: {summary}
-SOURCE ARTICLES: {source_articles}
+Return only the JSON object. No explanation, no markdown, no code fences.
 """
