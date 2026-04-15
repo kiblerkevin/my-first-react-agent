@@ -10,3 +10,5 @@ newsapi>=0.1.0
 serpapi>=1.0.0
 # Database
 sqlalchemy>=2.0.0
+# HTML Parsing
+beautifulsoup4>=4.12.0

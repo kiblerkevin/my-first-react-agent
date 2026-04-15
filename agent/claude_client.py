@@ -38,3 +38,16 @@ class ClaudeClient:
             )
         except Exception as e:
             raise Exception(f"Failed to create message: {str(e)}")
+
+    def send_message(self, user_message: str) -> str:
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                system=self.system_prompt,
+                messages=[{"role": "user", "content": user_message}]
+            )
+            return response.content[0].text
+        except Exception as e:
+            raise Exception(f"Failed to create message: {str(e)}")
