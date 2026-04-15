@@ -1,0 +1,7 @@
+revision_loop:
+  max_retries: 3
+  criterion_floors:
+    accuracy: 8.0
+    completeness: 7.0
+    readability: 7.0
+    seo: 6.0

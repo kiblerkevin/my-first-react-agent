@@ -1,4 +1,5 @@
 from collections import defaultdict
+import yaml
 
 from models.inputs.fetch_articles_input import FetchArticlesInput
 from models.inputs.fetch_scores_input import FetchScoresInput
@@ -13,10 +14,17 @@ from tools.create_blog_draft_tool import CreateBlogDraftTool
 from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.evaluate_blog_post_tool import EvaluateBlogPostTool
 
+ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
+
 MAX_ARTICLES_PER_TEAM = 2
 
 
 def main():
+    with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
+        orchestration_config = yaml.safe_load(f)
+    max_retries = orchestration_config['revision_loop']['max_retries']
+    criterion_floors = orchestration_config['revision_loop']['criterion_floors']
+
     fetch_articles_tool = FetchArticlesTool()
     fetch_scores_tool = FetchScoresTool()
     summarize_tool = SummarizeArticleTool()
@@ -73,38 +81,63 @@ def main():
     relevant = [s for s in summaries if s.get('is_relevant')]
     print(f"Summaries collected: {len(summaries)} total, {len(relevant)} relevant")
 
-    # Step 5: Create blog draft
-    print("\n--- Step 5: Create Blog Draft ---")
-    draft = draft_tool.execute(CreateBlogDraftInput(
-        summaries=summaries,
-        scores=scores_output.scores
-    ))
+    # Steps 5-6: Draft + evaluate with revision loop
+    print("\n--- Steps 5-6: Draft, Evaluate, and Revise ---")
+    best_draft = None
+    best_evaluation = None
+    revision_notes = None
+    current_draft = None
 
-    print(f"\nTitle:         {draft.title}")
-    print(f"Teams covered: {draft.teams_covered}")
-    print(f"Articles used: {draft.article_count}")
-    print(f"Excerpt:       {draft.excerpt}")
-    print(f"\nContent preview (first 1000 chars):\n{draft.content[:1000]}")
+    for attempt in range(max_retries):
+        print(f"\n  Attempt {attempt + 1}/{max_retries}")
 
-    # Step 6: Evaluate blog post
-    print("\n--- Step 6: Evaluate Blog Post ---")
-    evaluation = evaluate_tool.execute(EvaluateBlogPostInput(
-        title=draft.title,
-        content=draft.content,
-        excerpt=draft.excerpt,
-        summaries=summaries,
-        scores=scores_output.scores
-    ))
+        draft = draft_tool.execute(CreateBlogDraftInput(
+            summaries=summaries,
+            scores=scores_output.scores,
+            current_draft=current_draft,
+            revision_notes=revision_notes
+        ))
 
-    print(f"Evaluation ID:  {evaluation.evaluation_id}")
-    print(f"Overall score:  {evaluation.overall_score}/10")
-    print("Criteria scores:")
-    for criterion, score in evaluation.criteria_scores.items():
-        print(f"  {criterion:<14} {score}/10 — {evaluation.criteria_reasoning.get(criterion, '')}")
-    print("Improvement suggestions:")
-    for criterion, suggestions in evaluation.improvement_suggestions.items():
-        for suggestion in suggestions:
-            print(f"  [{criterion}] {suggestion}")
+        evaluation = evaluate_tool.execute(EvaluateBlogPostInput(
+            title=draft.title,
+            content=draft.content,
+            excerpt=draft.excerpt,
+            summaries=summaries,
+            scores=scores_output.scores
+        ))
+
+        print(f"  Overall score: {evaluation.overall_score}/10")
+        for criterion, score in evaluation.criteria_scores.items():
+            floor = criterion_floors.get(criterion, 0)
+            status = '✓' if score >= floor else '✗'
+            print(f"    {status} {criterion:<14} {score}/10 (floor: {floor})")
+
+        if best_evaluation is None or evaluation.overall_score > best_evaluation.overall_score:
+            best_draft = draft
+            best_evaluation = evaluation
+
+        failing = {
+            criterion: suggestions
+            for criterion, suggestions in evaluation.improvement_suggestions.items()
+            if evaluation.criteria_scores.get(criterion, 0) < criterion_floors.get(criterion, 0)
+        }
+
+        if not failing:
+            print(f"  All criterion floors met on attempt {attempt + 1}.")
+            break
+
+        revision_notes = failing
+        current_draft = draft.content
+        print(f"  Failing criteria: {list(failing.keys())} — revising...")
+    else:
+        print(f"  Max retries reached. Using best draft (score: {best_evaluation.overall_score}/10).")
+
+    print(f"\nFinal Title:         {best_draft.title}")
+    print(f"Final Teams covered: {best_draft.teams_covered}")
+    print(f"Final Articles used: {best_draft.article_count}")
+    print(f"Final Excerpt:       {best_draft.excerpt}")
+    print(f"Final Overall score: {best_evaluation.overall_score}/10")
+    print(f"\nContent preview (first 1000 chars):\n{best_draft.content[:1000]}")
 
 
 if __name__ == "__main__":

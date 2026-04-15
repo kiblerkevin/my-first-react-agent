@@ -7,7 +7,7 @@ from tools.base_tool import BaseTool
 from models.inputs.create_blog_draft_input import CreateBlogDraftInput
 from models.outputs.create_blog_draft_output import CreateBlogDraftOutput
 from agent.claude_client import ClaudeClient
-from prompts.create_blog_draft_prompt import CREATE_BLOG_DRAFT_PROMPT
+from prompts.create_blog_draft_prompt import CREATE_BLOG_DRAFT_PROMPT, CREATE_BLOG_DRAFT_REVISION_PROMPT
 from utils.logger.logger import setup_logger
 
 
@@ -93,7 +93,15 @@ class CreateBlogDraftTool(BaseTool):
         for s in relevant_summaries:
             summaries_by_team[s.get('team', 'Unknown')].append(s)
 
-        user_message = self._build_prompt(previous_scores, todays_games, summaries_by_team)
+        is_revision = input.current_draft and input.revision_notes
+        if is_revision:
+            self.claude_client.system_prompt = CREATE_BLOG_DRAFT_REVISION_PROMPT
+            user_message = self._build_revision_prompt(
+                input.current_draft, input.revision_notes, previous_scores, todays_games, summaries_by_team
+            )
+        else:
+            self.claude_client.system_prompt = CREATE_BLOG_DRAFT_PROMPT
+            user_message = self._build_prompt(previous_scores, todays_games, summaries_by_team)
 
         try:
             response_text = self.claude_client.send_message(user_message)
@@ -135,4 +143,17 @@ class CreateBlogDraftTool(BaseTool):
         else:
             sections.append("None.")
 
+        return '\n'.join(sections)
+
+    def _build_revision_prompt(self, current_draft, revision_notes, previous_scores, todays_games, summaries_by_team) -> str:
+        sections = [
+            "CURRENT DRAFT:",
+            current_draft,
+            "\nREVISION NOTES (address each of these):",
+            json.dumps(revision_notes, indent=2),
+            "\nSCORES (for reference):",
+            json.dumps(previous_scores + todays_games, indent=2),
+            "\nARTICLE SUMMARIES (for reference):",
+            json.dumps(dict(summaries_by_team), indent=2)
+        ]
         return '\n'.join(sections)

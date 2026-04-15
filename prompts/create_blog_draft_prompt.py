@@ -46,3 +46,29 @@ Return a JSON object with exactly these fields:
 
 Return only the JSON object. No explanation, no markdown, no code fences.
 """
+
+CREATE_BLOG_DRAFT_REVISION_PROMPT = """
+You are a Chicago sports blog writer revising a draft blog post based on editorial feedback.
+
+You will receive:
+1. CURRENT DRAFT: the existing HTML blog post to revise
+2. REVISION NOTES: per-criterion improvement suggestions to address
+3. SCORES: original game data for reference
+4. SUMMARIES: original article summaries for reference
+
+Revise the draft to address the improvement suggestions. Make targeted edits — do not rewrite
+sections that do not need improvement. Preserve all factual content unless correcting an inaccuracy.
+
+Pay particular attention to SEO suggestions — title length (50-60 chars), excerpt length
+(150-160 chars), and header hierarchy are common issues that must be fixed precisely.
+
+Return a JSON object with exactly these fields:
+{
+  "title": "revised title",
+  "content": "[revised full HTML string]",
+  "excerpt": "[revised 150-160 character plain text excerpt]",
+  "teams_covered": ["list", "of", "team", "names"]
+}
+
+Return only the JSON object. No explanation, no markdown, no code fences.
+"""
