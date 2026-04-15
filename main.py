@@ -1,65 +1,74 @@
-import json
+from collections import defaultdict
 
-from agent.base_agent import BaseAgent
-from agent.claude_client import ClaudeClient
-from agent.context_window import ContextWindow
+from models.inputs.fetch_articles_input import FetchArticlesInput
+from models.inputs.fetch_scores_input import FetchScoresInput
+from models.inputs.summarize_article_input import SummarizeArticleInput
+from models.inputs.create_blog_draft_input import CreateBlogDraftInput
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
-from models.inputs.summarize_article_input import SummarizeArticleInput
+from tools.create_blog_draft_tool import CreateBlogDraftTool
 
-SYSTEM_PROMPT = (
-    "You are a Chicago sports news assistant. "
-    "When asked about recent Chicago sports news or articles, use the fetch_articles tool to retrieve them. "
-    "When asked about scores or game results, use the fetch_scores tool to retrieve them."
-)
+MAX_ARTICLES_PER_TEAM = 2
 
 
 def main():
-    context = ContextWindow(conversation_history=[])
-    client = ClaudeClient(system_prompt=SYSTEM_PROMPT)
-
     fetch_articles_tool = FetchArticlesTool()
     fetch_scores_tool = FetchScoresTool()
     summarize_tool = SummarizeArticleTool()
+    draft_tool = CreateBlogDraftTool()
 
-    agent = BaseAgent(context=context, claude_client=client)
-    agent.tools = {
-        fetch_articles_tool.name: fetch_articles_tool,
-        fetch_scores_tool.name: fetch_scores_tool
-    }
+    # Step 1: Fetch scores
+    print("--- Step 1: Fetch Scores ---")
+    scores_output = fetch_scores_tool.execute(FetchScoresInput())
+    print(f"Scores fetched: {scores_output.score_count}")
+    if scores_output.errors:
+        print(f"Errors: {scores_output.errors}")
 
-    print("--- Step 1: Fetch Articles ---")
-    response = agent.send_message("Fetch the latest Chicago sports articles.")
-    print(f"\nAgent response:\n{response}\n")
+    # Step 2: Fetch articles
+    print("\n--- Step 2: Fetch Articles ---")
+    articles_output = fetch_articles_tool.execute(FetchArticlesInput())
+    print(f"Articles fetched: {articles_output.article_count}")
+    if articles_output.errors:
+        print(f"Errors: {articles_output.errors}")
 
-    print("--- Step 2: Fetch Scores ---")
-    response = agent.send_message("Now fetch the latest Chicago sports scores.")
-    print(f"\nAgent response:\n{response}\n")
+    # Step 3: Summarize top 2 articles per team
+    print(f"\n--- Step 3: Summarize Articles (top {MAX_ARTICLES_PER_TEAM} per team) ---")
+    articles_by_team = defaultdict(list)
+    for article in articles_output.articles:
+        articles_by_team[article.get('team', 'Unknown')].append(article)
 
-    print("--- Step 3: Summarize Top Article ---")
-    articles = fetch_articles_tool.execute(
-        fetch_articles_tool.input_model(force_refresh=False)
-    ).articles
+    summaries = []
+    for team, articles in articles_by_team.items():
+        top_articles = sorted(
+            articles, key=lambda a: a.get('relevance_score', 0), reverse=True
+        )[:MAX_ARTICLES_PER_TEAM]
 
-    if articles:
-        top = max(articles, key=lambda a: a.get('relevance_score', 0))
-        print(f"Summarizing: [{top.get('relevance_score')}] [{top.get('team')}] {top.get('title')}")
-        print(f"URL: {top.get('url')}\n")
+        for article in top_articles:
+            print(f"  Summarizing [{team}]: {article.get('title', '')[:70]}")
+            summary = summarize_tool.execute(SummarizeArticleInput(
+                url=article['url'],
+                title=article['title'],
+                team=team,
+                published_at=article.get('publishedAt', '')
+            ))
+            summaries.append(summary.model_dump())
 
-        summary_result = summarize_tool.execute(SummarizeArticleInput(
-            url=top['url'],
-            title=top['title'],
-            team=top['team'],
-            published_at=top.get('publishedAt', '')
-        ))
+    relevant = [s for s in summaries if s.get('is_relevant')]
+    print(f"Summaries collected: {len(summaries)} total, {len(relevant)} relevant")
 
-        print(f"Summary:          {summary_result.summary}")
-        print(f"Event type:       {summary_result.event_type}")
-        print(f"Players:          {summary_result.players_mentioned}")
-        print(f"Is relevant:      {summary_result.is_relevant}")
-    else:
-        print("No articles returned.")
+    # Step 4: Create blog draft
+    print("\n--- Step 4: Create Blog Draft ---")
+    draft = draft_tool.execute(CreateBlogDraftInput(
+        summaries=summaries,
+        scores=scores_output.scores
+    ))
+
+    print(f"\nTitle:         {draft.title}")
+    print(f"Teams covered: {draft.teams_covered}")
+    print(f"Articles used: {draft.article_count}")
+    print(f"Excerpt:       {draft.excerpt}")
+    print(f"\nContent preview (first 1000 chars):\n{draft.content[:1000]}")
 
 
 if __name__ == "__main__":
