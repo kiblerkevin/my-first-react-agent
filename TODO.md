@@ -12,35 +12,29 @@
                           into create_blog_draft, tracks best draft across attempts
 8. create_blog_taxonomy — Deterministic, no LLM, Daily Recap + team categories, team + top 4
                           player tags, memory layer with get_or_create pattern, wordpress_id column
-9. Human approval gate  — Email-based approval flow:
-                          - send_approval_email tool generates signed token, persists PendingApproval
-                            to DB, sends rendered HTML email with approve/reject buttons
-                          - Flask approval server (server/approval_server.py) handles callbacks
-                          - APScheduler background thread auto-archives expired approvals (24h)
-                          - Reject flow includes optional feedback form
-10. WordPress publish   — OAuth2 bearer token auth via WordPress.com API:
-                          - One-time /oauth/start flow stores token in local DB
-                          - Resolves category/tag names to WordPress IDs (create-if-missing)
-                          - Creates draft post via WP REST API v2
-                          - Triggered by approval callback in Flask server or directly in main.py
-
-## Workflow Complete ✅
-All core workflow steps are implemented. The human publishes the draft manually
-from the WordPress dashboard after approving via email.
+9. Human approval gate  — Email-based approval flow with signed tokens, Flask server,
+                          APScheduler expiry checker, reject with feedback form
+10. WordPress publish   — OAuth2 bearer token, category/tag ID resolution, draft creation
+11. Scheduler           — APScheduler cron trigger at 6 AM CT, exponential backoff retry (5 attempts),
+                          reusable workflow in workflow/daily_workflow.py
 
 ## Future Enhancements 🔮
 - [ ] Memory layer — article deduplication across runs, prevent re-summarizing previously seen articles
-- [ ] Embeddings/cosine similarity — replace fuzzy title matching with semantic deduplication
+- [ ] Embeddings/cosine similarity — replace fuzzy title matching with semantic deduplication (depends on memory layer)
 - [ ] Revision loop as tool vs orchestration — revisit after memory layer is implemented
 - [ ] Email notification — optional confirmation email after human publishes (removed from core workflow)
-- [ ] Scheduler — automate daily workflow execution via cron or APScheduler
 
 ## Notes
 - Memory/database layer started — Memory class in memory.py with category, tag,
   pending approval, and OAuth token CRUD methods
+- Article table exists in database.py but nothing writes to it yet
 - Deduplication method: fuzzy string matching on titles using rapidfuzz
 - deduplicate_articles runs before summarize_article in the workflow
 - refined_excerpt produced during revision loop, not by evaluate_blog_post
 - Flask server must be started separately: python server/approval_server.py
 - Gmail App Password required for SMTP (not regular account password)
 - WordPress.com OAuth2 required — run /oauth/start once to authorize
+- Scheduler config in config/scheduler.yaml, orchestration config in config/orchestration.yaml
+
+## Design Decisions to Revisit
+- [ ] Revision loop as tool vs orchestration — revisit after memory layer is implemented

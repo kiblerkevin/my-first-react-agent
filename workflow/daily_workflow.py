@@ -18,6 +18,7 @@ from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.evaluate_blog_post_tool import EvaluateBlogPostTool
 from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
 from tools.send_approval_email_tool import SendApprovalEmailTool
+from memory.memory import Memory
 from utils.logger.logger import setup_logger
 
 
@@ -46,6 +47,7 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
     evaluate_tool = EvaluateBlogPostTool()
     taxonomy_tool = CreateBlogTaxonomyTool()
     approval_tool = SendApprovalEmailTool()
+    memory = Memory()
 
     # Step 1: Fetch scores
     logger.info("Step 1: Fetching scores...")
@@ -55,12 +57,16 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
     # Step 2: Fetch articles
     logger.info("Step 2: Fetching articles...")
     articles_output = fetch_articles_tool.execute(FetchArticlesInput())
-    logger.info(f"Articles fetched: {articles_output.article_count}")
+    logger.info(
+        f"Articles fetched: {articles_output.article_count} total, "
+        f"{articles_output.new_article_count} new, "
+        f"{articles_output.filtered_article_count} previously seen"
+    )
 
     # Step 3: Deduplicate articles
     logger.info("Step 3: Deduplicating articles...")
     dedup_output = deduplicate_tool.execute(DeduplicateArticlesInput(
-        articles=articles_output.articles
+        articles=articles_output.new_articles
     ))
     logger.info(f"Duplicates removed: {dedup_output.duplicate_count}")
 
@@ -95,6 +101,7 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
     best_evaluation = None
     revision_notes = None
     current_draft = None
+    all_evaluations = []
 
     for attempt in range(max_retries):
         logger.info(f"  Draft attempt {attempt + 1}/{max_retries}")
@@ -114,6 +121,7 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
             scores=scores_output.scores
         ))
 
+        all_evaluations.append(evaluation.model_dump())
         logger.info(f"  Overall score: {evaluation.overall_score}/10")
 
         if best_evaluation is None or evaluation.overall_score > best_evaluation.overall_score:
@@ -137,6 +145,18 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
         logger.info(f"  Max retries reached. Using best draft (score: {best_evaluation.overall_score}/10).")
 
     logger.info(f"Final draft: '{best_draft.title}' | score: {best_evaluation.overall_score}/10")
+
+    # Persist blog draft and all evaluations
+    summary_id = memory.save_blog_draft({
+        'title': best_draft.title,
+        'content': best_draft.content,
+        'excerpt': best_draft.excerpt,
+        'teams_covered': best_draft.teams_covered,
+        'article_count': best_draft.article_count,
+        'overall_score': best_evaluation.overall_score
+    })
+    for eval_data in all_evaluations:
+        memory.save_evaluation(summary_id, eval_data)
 
     # Step 7: Create blog taxonomy
     logger.info("Step 7: Creating taxonomy...")

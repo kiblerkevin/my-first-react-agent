@@ -8,6 +8,7 @@ from models.inputs.fetch_articles_input import FetchArticlesInput
 from models.outputs.fetch_articles_output import FetchArticlesOutput
 from utils.article_collectors.api_collectors.newsapi_collector import NewsAPI_Collector
 from utils.article_collectors.api_collectors.serpapi_collector import SerpApiCollector
+from memory.memory import Memory
 from utils.logger.logger import setup_logger
 
 
@@ -80,9 +81,9 @@ class FetchArticlesTool(BaseTool):
             "newsapi": NewsAPI_Collector(),
             "serpapi": SerpApiCollector()
         }
+        self.memory = Memory()
 
     def execute(self, input: FetchArticlesInput) -> FetchArticlesOutput:
-        # force_refresh is reserved for future memory layer integration
         logger.info(f"Fetching articles (force_refresh={input.force_refresh})")
 
         output = FetchArticlesOutput()
@@ -104,6 +105,27 @@ class FetchArticlesTool(BaseTool):
         all_articles = self._deduplicate_across_sources(source_articles)
         output.articles = all_articles
         output.article_count = len(all_articles)
+
+        # Memory layer: filter previously seen articles
+        if input.force_refresh:
+            output.new_articles = all_articles
+            output.new_article_count = len(all_articles)
+            output.filtered_article_count = 0
+            logger.info("force_refresh=True — skipping memory filter.")
+        else:
+            seen_urls = self.memory.get_seen_urls()
+            new_articles = [a for a in all_articles if a.get('url') not in seen_urls]
+            output.new_articles = new_articles
+            output.new_article_count = len(new_articles)
+            output.filtered_article_count = len(all_articles) - len(new_articles)
+            logger.info(
+                f"Memory filter: {output.new_article_count} new, "
+                f"{output.filtered_article_count} previously seen."
+            )
+
+        # Persist new articles and purge old ones
+        self.memory.save_articles(output.new_articles)
+        self.memory.purge_old_articles()
 
         return output
 

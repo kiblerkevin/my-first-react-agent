@@ -13,23 +13,38 @@ class Article(Base):
     
     id = Column(Integer, primary_key=True)
     title = Column(String(255), nullable=False)
-    content = Column(Text, nullable=False)
-    source = Column(String(255), nullable=False)
+    content = Column(Text, nullable=True)
+    source = Column(String(255), nullable=True)
     url = Column(String(255), nullable=False, unique=True)
-    published_at = Column(DateTime, default=datetime.utcnow)
+    published_at = Column(DateTime, nullable=True)
     team = Column(String(100), nullable=True)
-    embedding = Column(Text, nullable=True)  # Store embedding as a JSON string or comma-separated values
-    is_duplicate = Column(Boolean, default=False)
-    duplicate_of_id = Column(Integer, ForeignKey('articles.id'), nullable=True)
-    
-    
+    fetched_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ArticleSummary(Base):
+    __tablename__ = 'article_summaries'
+
+    id = Column(Integer, primary_key=True)
+    url = Column(String(255), nullable=False, unique=True)
+    team = Column(String(100), nullable=True)
+    summary = Column(Text, nullable=False)
+    event_type = Column(String(50), nullable=True)
+    players_mentioned = Column(Text, nullable=True)  # JSON string
+    is_relevant = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Summary(Base):
     __tablename__ = 'summaries'
     
     id = Column(Integer, primary_key=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    title = Column(String(255), nullable=True)
     html_content = Column(Text, nullable=False)
-    summary = Column(Text, nullable=False)
+    summary = Column(Text, nullable=True)  # excerpt
+    teams_covered = Column(Text, nullable=True)  # JSON string
+    article_count = Column(Integer, nullable=True)
+    overall_score = Column(Float, nullable=True)
     
     categories = relationship("SummaryCategory", back_populates="summary")
     tags = relationship("SummaryTag", back_populates="summary")
@@ -81,9 +96,10 @@ class Evaluation(Base):
     __tablename__ = 'evaluations'
     
     id = Column(Integer, primary_key=True)
+    evaluation_id = Column(String(100), nullable=False)  # ISO timestamp identifying the evaluation run
     summary_id = Column(Integer, ForeignKey('summaries.id'), nullable=False)
     criterion = Column(String(100), nullable=False)
-    score = Column(Integer, nullable=False)
+    score = Column(Float, nullable=False)
     reasoning = Column(Text, nullable=True)
     
     summary = relationship("Summary", back_populates="evaluations")

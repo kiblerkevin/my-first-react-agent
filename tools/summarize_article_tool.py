@@ -8,6 +8,7 @@ from models.inputs.summarize_article_input import SummarizeArticleInput
 from models.outputs.summarize_article_output import SummarizeArticleOutput
 from agent.claude_client import ClaudeClient
 from prompts.summarize_article_prompt import SUMMARIZE_ARTICLE_PROMPT
+from memory.memory import Memory
 from utils.logger.logger import setup_logger
 
 
@@ -67,8 +68,15 @@ class SummarizeArticleTool(BaseTool):
         self.claude_client.model = summarizer_config['model']
         self.claude_client.temperature = summarizer_config['temperature']
         self.claude_client.max_tokens = summarizer_config['max_tokens']
+        self.memory = Memory()
 
     def execute(self, input: SummarizeArticleInput) -> SummarizeArticleOutput:
+        # Check memory for existing summary
+        cached = self.memory.get_article_summary(input.url)
+        if cached:
+            logger.info(f"Using cached summary for {input.team}: {input.title[:60]}")
+            return SummarizeArticleOutput(**cached)
+
         content = self._fetch_content(input.url)
         title_only = content is None
 
@@ -88,6 +96,7 @@ class SummarizeArticleTool(BaseTool):
                 is_relevant=False if title_only else parsed.get('is_relevant', True)
             )
             logger.info(f"Summarized article for {input.team}: {input.title[:60]}")
+            self.memory.save_article_summary(output.model_dump())
             return output
 
         except Exception as e:

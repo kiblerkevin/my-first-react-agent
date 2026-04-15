@@ -1,6 +1,6 @@
 import yaml
 
-from memory.database import init_db, get_session, Category, Tag, PendingApproval, OAuthToken
+from memory.database import init_db, get_session, Category, Tag, PendingApproval, OAuthToken, Article, ArticleSummary, Summary, Evaluation
 from utils.logger.logger import setup_logger
 
 
@@ -14,7 +14,59 @@ class Memory:
         with open(DATABASE_CONFIG_PATH, 'r') as f:
             config = yaml.safe_load(f)
         db_path = config['database']['path']
+        self.retention_days = config['database'].get('retention_days', 30)
         self.engine = init_db(db_path)
+
+    def get_seen_urls(self) -> set:
+        session = get_session(self.engine)
+        try:
+            urls = session.query(Article.url).all()
+            return {url for (url,) in urls}
+        finally:
+            session.close()
+
+    def save_articles(self, articles: list[dict]):
+        from datetime import datetime
+        session = get_session(self.engine)
+        try:
+            for article in articles:
+                url = article.get('url')
+                if not url:
+                    continue
+                existing = session.query(Article).filter_by(url=url).first()
+                if existing:
+                    continue
+                published_at = None
+                if article.get('publishedAt'):
+                    try:
+                        published_at = datetime.fromisoformat(
+                            article['publishedAt'].replace('Z', '+00:00')
+                        )
+                    except Exception:
+                        pass
+                session.add(Article(
+                    title=article.get('title', ''),
+                    url=url,
+                    source=article.get('source'),
+                    team=article.get('team'),
+                    published_at=published_at
+                ))
+            session.commit()
+            logger.info(f"Saved {len(articles)} articles to memory.")
+        finally:
+            session.close()
+
+    def purge_old_articles(self):
+        from datetime import datetime, timedelta
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=self.retention_days)
+            count = session.query(Article).filter(Article.fetched_at < cutoff).delete()
+            session.commit()
+            if count:
+                logger.info(f"Purged {count} articles older than {self.retention_days} days.")
+        finally:
+            session.close()
 
     def get_or_create_category(self, name: str) -> dict:
         session = get_session(self.engine)
@@ -186,5 +238,82 @@ class Memory:
         try:
             token = session.query(OAuthToken).filter_by(service=service).first()
             return token.access_token if token else None
+        finally:
+            session.close()
+
+    def get_article_summary(self, url: str) -> dict | None:
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            s = session.query(ArticleSummary).filter_by(url=url).first()
+            if not s:
+                return None
+            return {
+                'url': s.url,
+                'team': s.team,
+                'summary': s.summary,
+                'event_type': s.event_type,
+                'players_mentioned': _json.loads(s.players_mentioned) if s.players_mentioned else [],
+                'is_relevant': s.is_relevant
+            }
+        finally:
+            session.close()
+
+    def save_article_summary(self, data: dict):
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            existing = session.query(ArticleSummary).filter_by(url=data.get('url')).first()
+            if existing:
+                return
+            session.add(ArticleSummary(
+                url=data.get('url', ''),
+                team=data.get('team'),
+                summary=data.get('summary', ''),
+                event_type=data.get('event_type'),
+                players_mentioned=_json.dumps(data.get('players_mentioned', [])),
+                is_relevant=data.get('is_relevant', True)
+            ))
+            session.commit()
+            logger.info(f"Saved article summary for: {data.get('url', '')[:60]}")
+        finally:
+            session.close()
+
+    def save_blog_draft(self, data: dict) -> int:
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            draft = Summary(
+                title=data.get('title', ''),
+                html_content=data.get('content', ''),
+                summary=data.get('excerpt', ''),
+                teams_covered=_json.dumps(data.get('teams_covered', [])),
+                article_count=data.get('article_count', 0),
+                overall_score=data.get('overall_score')
+            )
+            session.add(draft)
+            session.commit()
+            logger.info(f"Saved blog draft: '{data.get('title', '')}' (id={draft.id})")
+            return draft.id
+        finally:
+            session.close()
+
+    def save_evaluation(self, summary_id: int, evaluation: dict):
+        session = get_session(self.engine)
+        try:
+            evaluation_id = evaluation.get('evaluation_id', '')
+            criteria_scores = evaluation.get('criteria_scores', {})
+            criteria_reasoning = evaluation.get('criteria_reasoning', {})
+
+            for criterion, score in criteria_scores.items():
+                session.add(Evaluation(
+                    evaluation_id=evaluation_id,
+                    summary_id=summary_id,
+                    criterion=criterion,
+                    score=float(score),
+                    reasoning=criteria_reasoning.get(criterion)
+                ))
+            session.commit()
+            logger.info(f"Saved evaluation {evaluation_id[:20]}... ({len(criteria_scores)} criteria) for summary_id={summary_id}")
         finally:
             session.close()
