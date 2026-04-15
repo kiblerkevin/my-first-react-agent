@@ -12,3 +12,5 @@ serpapi>=1.0.0
 sqlalchemy>=2.0.0
 # HTML Parsing
 beautifulsoup4>=4.12.0
+# Fuzzy Matching
+rapidfuzz>=3.0.0

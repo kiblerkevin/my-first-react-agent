@@ -4,10 +4,12 @@ from models.inputs.fetch_articles_input import FetchArticlesInput
 from models.inputs.fetch_scores_input import FetchScoresInput
 from models.inputs.summarize_article_input import SummarizeArticleInput
 from models.inputs.create_blog_draft_input import CreateBlogDraftInput
+from models.inputs.deduplicate_articles_input import DeduplicateArticlesInput
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
 from tools.create_blog_draft_tool import CreateBlogDraftTool
+from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 
 MAX_ARTICLES_PER_TEAM = 2
 
@@ -17,6 +19,7 @@ def main():
     fetch_scores_tool = FetchScoresTool()
     summarize_tool = SummarizeArticleTool()
     draft_tool = CreateBlogDraftTool()
+    deduplicate_tool = DeduplicateArticlesTool()
 
     # Step 1: Fetch scores
     print("--- Step 1: Fetch Scores ---")
@@ -32,10 +35,20 @@ def main():
     if articles_output.errors:
         print(f"Errors: {articles_output.errors}")
 
-    # Step 3: Summarize top 2 articles per team
-    print(f"\n--- Step 3: Summarize Articles (top {MAX_ARTICLES_PER_TEAM} per team) ---")
+    # Step 3: Deduplicate articles within each team
+    print("\n--- Step 3: Deduplicate Articles ---")
+    dedup_output = deduplicate_tool.execute(DeduplicateArticlesInput(
+        articles=articles_output.articles
+    ))
+    print(f"Duplicates removed: {dedup_output.duplicate_count}")
+    if dedup_output.duplicate_groups:
+        for group in dedup_output.duplicate_groups:
+            print(f"  Collapsed: {group[0][:60]}... ({len(group) - 1} duplicate(s))")
+
+    # Step 4: Summarize top 2 articles per team
+    print(f"\n--- Step 4: Summarize Articles (top {MAX_ARTICLES_PER_TEAM} per team) ---")
     articles_by_team = defaultdict(list)
-    for article in articles_output.articles:
+    for article in dedup_output.unique_articles:
         articles_by_team[article.get('team', 'Unknown')].append(article)
 
     summaries = []
@@ -57,8 +70,8 @@ def main():
     relevant = [s for s in summaries if s.get('is_relevant')]
     print(f"Summaries collected: {len(summaries)} total, {len(relevant)} relevant")
 
-    # Step 4: Create blog draft
-    print("\n--- Step 4: Create Blog Draft ---")
+    # Step 5: Create blog draft
+    print("\n--- Step 5: Create Blog Draft ---")
     draft = draft_tool.execute(CreateBlogDraftInput(
         summaries=summaries,
         scores=scores_output.scores
