@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Optional
 
 
 class EvaluateBlogPostInput(BaseModel):
@@ -13,4 +14,8 @@ class EvaluateBlogPostInput(BaseModel):
     scores: list[dict] = Field(
         default_factory=list,
         description="Game scores from fetch_scores used as ground truth for completeness scoring."
+    )
+    rejection_feedback: Optional[str] = Field(
+        default=None,
+        description="Feedback from the most recent human rejection. The evaluator should check whether this was addressed."
     )

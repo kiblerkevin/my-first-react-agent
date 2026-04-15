@@ -97,11 +97,11 @@ class CreateBlogDraftTool(BaseTool):
         if is_revision:
             self.claude_client.system_prompt = CREATE_BLOG_DRAFT_REVISION_PROMPT
             user_message = self._build_revision_prompt(
-                input.current_draft, input.revision_notes, previous_scores, todays_games, summaries_by_team
+                input.current_draft, input.revision_notes, previous_scores, todays_games, summaries_by_team, input.rejection_feedback
             )
         else:
             self.claude_client.system_prompt = CREATE_BLOG_DRAFT_PROMPT
-            user_message = self._build_prompt(previous_scores, todays_games, summaries_by_team)
+            user_message = self._build_prompt(previous_scores, todays_games, summaries_by_team, input.rejection_feedback)
 
         try:
             response_text = self.claude_client.send_message(user_message)
@@ -122,8 +122,11 @@ class CreateBlogDraftTool(BaseTool):
             logger.error(f"Error creating blog draft: {e}")
             return CreateBlogDraftOutput()
 
-    def _build_prompt(self, previous_scores, todays_games, summaries_by_team) -> str:
+    def _build_prompt(self, previous_scores, todays_games, summaries_by_team, rejection_feedback=None) -> str:
         sections = []
+
+        if rejection_feedback:
+            sections.append(f"PREVIOUS REJECTION FEEDBACK (address this in the draft):\n{rejection_feedback}\n")
 
         sections.append("COMPLETED GAMES (previous day):")
         if previous_scores:
@@ -145,8 +148,13 @@ class CreateBlogDraftTool(BaseTool):
 
         return '\n'.join(sections)
 
-    def _build_revision_prompt(self, current_draft, revision_notes, previous_scores, todays_games, summaries_by_team) -> str:
-        sections = [
+    def _build_revision_prompt(self, current_draft, revision_notes, previous_scores, todays_games, summaries_by_team, rejection_feedback=None) -> str:
+        sections = []
+
+        if rejection_feedback:
+            sections.append(f"PREVIOUS REJECTION FEEDBACK (address this in the revision):\n{rejection_feedback}\n")
+
+        sections.extend([
             "CURRENT DRAFT:",
             current_draft,
             "\nREVISION NOTES (address each of these):",
@@ -155,5 +163,5 @@ class CreateBlogDraftTool(BaseTool):
             json.dumps(previous_scores + todays_games, indent=2),
             "\nARTICLE SUMMARIES (for reference):",
             json.dumps(dict(summaries_by_team), indent=2)
-        ]
+        ])
         return '\n'.join(sections)

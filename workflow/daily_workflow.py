@@ -49,6 +49,15 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
     approval_tool = SendApprovalEmailTool()
     memory = Memory()
 
+    # Load most recent rejection feedback
+    rejection_feedback = None
+    recent_rejection = memory.get_most_recent_rejection()
+    if recent_rejection:
+        rejection_feedback = recent_rejection['feedback']
+        logger.info(f"Loaded rejection feedback from '{recent_rejection['blog_title']}': {rejection_feedback[:80]}...")
+    else:
+        logger.info("No previous rejection feedback found.")
+
     # Step 1: Fetch scores
     logger.info("Step 1: Fetching scores...")
     scores_output = fetch_scores_tool.execute(FetchScoresInput())
@@ -110,7 +119,8 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
             summaries=summaries,
             scores=scores_output.scores,
             current_draft=current_draft,
-            revision_notes=revision_notes
+            revision_notes=revision_notes,
+            rejection_feedback=rejection_feedback
         ))
 
         evaluation = evaluate_tool.execute(EvaluateBlogPostInput(
@@ -118,7 +128,8 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
             content=draft.content,
             excerpt=draft.excerpt,
             summaries=summaries,
-            scores=scores_output.scores
+            scores=scores_output.scores,
+            rejection_feedback=rejection_feedback
         ))
 
         all_evaluations.append(evaluation.model_dump())

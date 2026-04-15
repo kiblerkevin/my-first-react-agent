@@ -20,3 +20,7 @@ class CreateBlogDraftInput(BaseModel):
         default=None,
         description="Per-criterion improvement suggestions from evaluate_blog_post to address in the revision."
     )
+    rejection_feedback: Optional[str] = Field(
+        default=None,
+        description="Feedback from the most recent human rejection. The drafter should address this feedback."
+    )

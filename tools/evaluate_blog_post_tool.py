@@ -107,7 +107,7 @@ class EvaluateBlogPostTool(BaseTool):
             return EvaluateBlogPostOutput(evaluation_id=evaluation_id)
 
     def _build_prompt(self, input: EvaluateBlogPostInput) -> str:
-        return '\n'.join([
+        sections = [
             "BLOG POST:",
             f"Title: {input.title}",
             f"Excerpt: {input.excerpt}",
@@ -116,4 +116,11 @@ class EvaluateBlogPostTool(BaseTool):
             json.dumps(input.summaries, indent=2),
             "\nSCORES (ground truth for completeness):",
             json.dumps(input.scores, indent=2)
-        ])
+        ]
+
+        if input.rejection_feedback:
+            sections.append(
+                f"\nPREVIOUS REJECTION FEEDBACK (check whether this was addressed):\n{input.rejection_feedback}"
+            )
+
+        return '\n'.join(sections)

@@ -212,6 +212,22 @@ class Memory:
         finally:
             session.close()
 
+    def get_most_recent_rejection(self) -> dict | None:
+        session = get_session(self.engine)
+        try:
+            approval = session.query(PendingApproval).filter(
+                PendingApproval.status == 'rejected',
+                PendingApproval.feedback.isnot(None)
+            ).order_by(PendingApproval.resolved_at.desc()).first()
+            if not approval:
+                return None
+            return {
+                'blog_title': approval.blog_title,
+                'feedback': approval.feedback
+            }
+        finally:
+            session.close()
+
     def save_oauth_token(self, service: str, access_token: str, blog_id: str = None, blog_url: str = None):
         session = get_session(self.engine)
         try:
