@@ -1,0 +1,166 @@
+import os
+import sys
+import json
+
+import yaml
+from flask import Flask, request, render_template_string
+from dotenv import load_dotenv
+from apscheduler.schedulers.background import BackgroundScheduler
+
+# Add project root to path so imports work
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from memory.memory import Memory
+from utils.logger.logger import setup_logger
+
+
+load_dotenv()
+logger = setup_logger(__name__)
+
+ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
+
+app = Flask(__name__)
+memory = Memory()
+
+
+# --- HTML Templates ---
+
+APPROVED_PAGE = """
+<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+<h1 style="color: #28a745;">✅ Blog Post Approved</h1>
+<p><strong>{{ title }}</strong> has been approved and will be published shortly.</p>
+</body></html>
+"""
+
+ALREADY_RESOLVED_PAGE = """
+<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+<h1 style="color: #6c757d;">Already Resolved</h1>
+<p>This approval request has already been <strong>{{ status }}</strong>.</p>
+</body></html>
+"""
+
+INVALID_TOKEN_PAGE = """
+<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+<h1 style="color: #dc3545;">Invalid Token</h1>
+<p>This approval link is invalid or has expired.</p>
+</body></html>
+"""
+
+REJECT_FORM_PAGE = """
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
+<h1 style="color: #dc3545;">❌ Reject Blog Post</h1>
+<p><strong>{{ title }}</strong></p>
+<form method="POST">
+    <label for="feedback"><strong>Feedback (optional):</strong></label><br>
+    <textarea name="feedback" id="feedback" rows="6"
+              style="width: 100%; margin: 10px 0; padding: 10px; font-size: 14px;"
+              placeholder="What should be improved?"></textarea><br>
+    <button type="submit"
+            style="background-color: #dc3545; color: white; padding: 12px 30px;
+                   border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
+        Confirm Rejection
+    </button>
+</form>
+</body></html>
+"""
+
+REJECTED_PAGE = """
+<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+<h1 style="color: #dc3545;">❌ Blog Post Rejected</h1>
+<p><strong>{{ title }}</strong> has been rejected and archived.</p>
+{% if feedback %}<p><strong>Feedback:</strong> {{ feedback }}</p>{% endif %}
+</body></html>
+"""
+
+STATUS_PAGE = """
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
+<h1>Approval Status</h1>
+<p><strong>Title:</strong> {{ approval.blog_title }}</p>
+<p><strong>Status:</strong> {{ approval.status }}</p>
+<p><strong>Created:</strong> {{ approval.created_at }}</p>
+<p><strong>Expires:</strong> {{ approval.expires_at }}</p>
+{% if approval.resolved_at %}<p><strong>Resolved:</strong> {{ approval.resolved_at }}</p>{% endif %}
+{% if approval.feedback %}<p><strong>Feedback:</strong> {{ approval.feedback }}</p>{% endif %}
+</body></html>
+"""
+
+
+# --- Routes ---
+
+@app.route('/approve/<token>')
+def approve(token):
+    approval = memory.get_pending_approval(token)
+    if not approval:
+        return render_template_string(INVALID_TOKEN_PAGE), 404
+
+    if approval['status'] != 'pending':
+        return render_template_string(ALREADY_RESOLVED_PAGE, status=approval['status'])
+
+    memory.update_approval_status(token, 'approved')
+    logger.info(f"Blog post approved: {approval['blog_title']}")
+
+    # TODO: Trigger WordPress publish tool here in production
+    # from tools.wordpress_publish_tool import WordPressPublishTool
+    # publish_tool = WordPressPublishTool()
+    # publish_tool.execute(...)
+
+    return render_template_string(APPROVED_PAGE, title=approval['blog_title'])
+
+
+@app.route('/reject/<token>', methods=['GET', 'POST'])
+def reject(token):
+    approval = memory.get_pending_approval(token)
+    if not approval:
+        return render_template_string(INVALID_TOKEN_PAGE), 404
+
+    if approval['status'] != 'pending':
+        return render_template_string(ALREADY_RESOLVED_PAGE, status=approval['status'])
+
+    if request.method == 'GET':
+        return render_template_string(REJECT_FORM_PAGE, title=approval['blog_title'])
+
+    feedback = request.form.get('feedback', '').strip() or None
+    memory.update_approval_status(token, 'rejected', feedback=feedback)
+    logger.info(f"Blog post rejected: {approval['blog_title']} (feedback: {feedback})")
+
+    return render_template_string(REJECTED_PAGE, title=approval['blog_title'], feedback=feedback)
+
+
+@app.route('/status/<token>')
+def status(token):
+    approval = memory.get_pending_approval(token)
+    if not approval:
+        return render_template_string(INVALID_TOKEN_PAGE), 404
+
+    return render_template_string(STATUS_PAGE, approval=approval)
+
+
+# --- Background Scheduler ---
+
+def check_expired_approvals():
+    expired = memory.get_expired_approvals()
+    for approval in expired:
+        memory.update_approval_status(approval['token'], 'expired')
+        logger.info(f"Auto-archived expired approval: {approval['blog_title']}")
+    if expired:
+        logger.info(f"Archived {len(expired)} expired approval(s).")
+
+
+def start_scheduler():
+    with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
+        config = yaml.safe_load(f)
+    interval = config['approval']['check_interval_minutes']
+
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(check_expired_approvals, 'interval', minutes=interval)
+    scheduler.start()
+    logger.info(f"Expiry checker started (interval: {interval} minutes)")
+
+
+# --- Entry Point ---
+
+if __name__ == '__main__':
+    start_scheduler()
+    port = int(os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000').split(':')[-1])
+    logger.info(f"Approval server starting on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)

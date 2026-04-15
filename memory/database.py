@@ -97,6 +97,25 @@ class ImprovementSuggestion(Base):
     suggestion = Column(Text, nullable=False)
     
     summary = relationship("Summary", back_populates="improvement_suggestions")
+
+
+class PendingApproval(Base):
+    __tablename__ = 'pending_approvals'
+
+    id = Column(Integer, primary_key=True)
+    token = Column(String(512), nullable=False, unique=True)
+    status = Column(String(20), nullable=False, default='pending')  # pending, approved, rejected, expired
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    blog_title = Column(String(255), nullable=False)
+    blog_content = Column(Text, nullable=False)
+    blog_excerpt = Column(Text, nullable=True)
+    taxonomy_data = Column(Text, nullable=True)  # JSON string
+    evaluation_data = Column(Text, nullable=True)  # JSON string
+    summaries_data = Column(Text, nullable=True)  # JSON string
+    scores_data = Column(Text, nullable=True)  # JSON string
+    feedback = Column(Text, nullable=True)
     
     
 def get_engine(db_path='data/articles.db'):

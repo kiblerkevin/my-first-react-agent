@@ -1,6 +1,6 @@
 import yaml
 
-from memory.database import init_db, get_session, Category, Tag
+from memory.database import init_db, get_session, Category, Tag, PendingApproval
 from utils.logger.logger import setup_logger
 
 
@@ -67,5 +67,73 @@ class Memory:
                 {'id': t.id, 'name': t.name, 'wordpress_id': t.wordpress_id}
                 for t in session.query(Tag).all()
             ]
+        finally:
+            session.close()
+
+    def create_pending_approval(self, data: dict) -> dict:
+        session = get_session(self.engine)
+        try:
+            approval = PendingApproval(**data)
+            session.add(approval)
+            session.commit()
+            logger.info(f"Created pending approval: {approval.token[:20]}...")
+            return {
+                'id': approval.id,
+                'token': approval.token,
+                'status': approval.status,
+                'expires_at': approval.expires_at.isoformat()
+            }
+        finally:
+            session.close()
+
+    def get_pending_approval(self, token: str) -> dict | None:
+        session = get_session(self.engine)
+        try:
+            approval = session.query(PendingApproval).filter_by(token=token).first()
+            if not approval:
+                return None
+            return {
+                'id': approval.id,
+                'token': approval.token,
+                'status': approval.status,
+                'created_at': approval.created_at.isoformat(),
+                'expires_at': approval.expires_at.isoformat(),
+                'resolved_at': approval.resolved_at.isoformat() if approval.resolved_at else None,
+                'blog_title': approval.blog_title,
+                'blog_content': approval.blog_content,
+                'blog_excerpt': approval.blog_excerpt,
+                'taxonomy_data': approval.taxonomy_data,
+                'evaluation_data': approval.evaluation_data,
+                'summaries_data': approval.summaries_data,
+                'scores_data': approval.scores_data,
+                'feedback': approval.feedback
+            }
+        finally:
+            session.close()
+
+    def update_approval_status(self, token: str, status: str, feedback: str = None):
+        from datetime import datetime
+        session = get_session(self.engine)
+        try:
+            approval = session.query(PendingApproval).filter_by(token=token).first()
+            if approval:
+                approval.status = status
+                approval.resolved_at = datetime.utcnow()
+                if feedback:
+                    approval.feedback = feedback
+                session.commit()
+                logger.info(f"Updated approval {token[:20]}... to status={status}")
+        finally:
+            session.close()
+
+    def get_expired_approvals(self) -> list[dict]:
+        from datetime import datetime
+        session = get_session(self.engine)
+        try:
+            expired = session.query(PendingApproval).filter(
+                PendingApproval.status == 'pending',
+                PendingApproval.expires_at < datetime.utcnow()
+            ).all()
+            return [{'token': a.token, 'blog_title': a.blog_title} for a in expired]
         finally:
             session.close()

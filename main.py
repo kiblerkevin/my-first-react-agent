@@ -8,6 +8,7 @@ from models.inputs.create_blog_draft_input import CreateBlogDraftInput
 from models.inputs.deduplicate_articles_input import DeduplicateArticlesInput
 from models.inputs.evaluate_blog_post_input import EvaluateBlogPostInput
 from models.inputs.create_blog_taxonomy_input import CreateBlogTaxonomyInput
+from models.inputs.send_approval_email_input import SendApprovalEmailInput
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
@@ -15,6 +16,7 @@ from tools.create_blog_draft_tool import CreateBlogDraftTool
 from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.evaluate_blog_post_tool import EvaluateBlogPostTool
 from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
+from tools.send_approval_email_tool import SendApprovalEmailTool
 
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
@@ -34,6 +36,7 @@ def main():
     deduplicate_tool = DeduplicateArticlesTool()
     evaluate_tool = EvaluateBlogPostTool()
     taxonomy_tool = CreateBlogTaxonomyTool()
+    approval_tool = SendApprovalEmailTool()
 
     # Step 1: Fetch scores
     print("--- Step 1: Fetch Scores ---")
@@ -165,6 +168,27 @@ def main():
         print(f"New categories created: {taxonomy.new_categories}")
     if taxonomy.new_tags:
         print(f"New tags created: {taxonomy.new_tags}")
+
+    # Step 8: Send approval email
+    print("\n--- Step 8: Send Approval Email ---")
+    approval_result = approval_tool.execute(SendApprovalEmailInput(
+        title=best_draft.title,
+        content=best_draft.content,
+        excerpt=best_draft.excerpt,
+        categories=taxonomy.categories,
+        tags=taxonomy.tags,
+        evaluation_scores=best_evaluation.criteria_scores,
+        summaries=summaries,
+        scores=scores_output.scores
+    ))
+
+    print(f"Token:      {approval_result.token[:40]}...")
+    print(f"Expires at: {approval_result.expires_at}")
+    print(f"Email sent: {approval_result.email_sent}")
+    if approval_result.error:
+        print(f"Error:      {approval_result.error}")
+    print("\nWorkflow complete. Awaiting human approval via email.")
+    print("Start the approval server with: python server/approval_server.py")
 
 
 if __name__ == "__main__":
