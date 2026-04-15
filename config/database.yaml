@@ -1,0 +1,6 @@
+database:
+  path: "data/articles.db"
+
+taxonomy:
+  default_category: "Daily Recap"
+  max_player_tags: 4

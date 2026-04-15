@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, Counter
 import yaml
 
 from models.inputs.fetch_articles_input import FetchArticlesInput
@@ -7,12 +7,14 @@ from models.inputs.summarize_article_input import SummarizeArticleInput
 from models.inputs.create_blog_draft_input import CreateBlogDraftInput
 from models.inputs.deduplicate_articles_input import DeduplicateArticlesInput
 from models.inputs.evaluate_blog_post_input import EvaluateBlogPostInput
+from models.inputs.create_blog_taxonomy_input import CreateBlogTaxonomyInput
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
 from tools.create_blog_draft_tool import CreateBlogDraftTool
 from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.evaluate_blog_post_tool import EvaluateBlogPostTool
+from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
 
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
@@ -31,6 +33,7 @@ def main():
     draft_tool = CreateBlogDraftTool()
     deduplicate_tool = DeduplicateArticlesTool()
     evaluate_tool = EvaluateBlogPostTool()
+    taxonomy_tool = CreateBlogTaxonomyTool()
 
     # Step 1: Fetch scores
     print("--- Step 1: Fetch Scores ---")
@@ -138,6 +141,30 @@ def main():
     print(f"Final Excerpt:       {best_draft.excerpt}")
     print(f"Final Overall score: {best_evaluation.overall_score}/10")
     print(f"\nContent preview (first 1000 chars):\n{best_draft.content[:1000]}")
+
+    # Step 7: Create blog taxonomy
+    print("\n--- Step 7: Create Blog Taxonomy ---")
+    all_players = []
+    for s in relevant:
+        all_players.extend(s.get('players_mentioned', []))
+
+    taxonomy = taxonomy_tool.execute(CreateBlogTaxonomyInput(
+        teams_covered=best_draft.teams_covered,
+        players_mentioned=all_players
+    ))
+
+    print("Categories:")
+    for cat in taxonomy.categories:
+        wp_id = cat.get('wordpress_id') or 'unresolved'
+        print(f"  {cat['name']} (local_id={cat['id']}, wp_id={wp_id})")
+    print("Tags:")
+    for tag in taxonomy.tags:
+        wp_id = tag.get('wordpress_id') or 'unresolved'
+        print(f"  {tag['name']} (local_id={tag['id']}, wp_id={wp_id})")
+    if taxonomy.new_categories:
+        print(f"New categories created: {taxonomy.new_categories}")
+    if taxonomy.new_tags:
+        print(f"New tags created: {taxonomy.new_tags}")
 
 
 if __name__ == "__main__":

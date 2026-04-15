@@ -1,8 +1,21 @@
 from pydantic import BaseModel, Field
 
+
 class CreateBlogTaxonomyOutput(BaseModel):
     """Output schema for create_blog_taxonomy tool"""
-    assigned_category: str = Field(description="The category assigned to the blog post.")
-    assigned_tags: list[str] = Field(description="List of tags assigned to the blog post.")
-    new_categories: list[str] = Field(description="List of any new categories that were created to classify the blog post.")
-    new_tags: list[str] = Field(description="List of any new tags that were created to assign to the blog post.")
+    categories: list[dict] = Field(
+        default_factory=list,
+        description="Assigned categories, each with name, id (local), and wordpress_id (nullable)."
+    )
+    tags: list[dict] = Field(
+        default_factory=list,
+        description="Assigned tags, each with name, id (local), and wordpress_id (nullable)."
+    )
+    new_categories: list[str] = Field(
+        default_factory=list,
+        description="Names of categories created during this run."
+    )
+    new_tags: list[str] = Field(
+        default_factory=list,
+        description="Names of tags created during this run."
+    )

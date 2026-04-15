@@ -31,6 +31,11 @@ class Summary(Base):
     html_content = Column(Text, nullable=False)
     summary = Column(Text, nullable=False)
     
+    categories = relationship("SummaryCategory", back_populates="summary")
+    tags = relationship("SummaryTag", back_populates="summary")
+    evaluations = relationship("Evaluation", back_populates="summary")
+    improvement_suggestions = relationship("ImprovementSuggestion", back_populates="summary")
+    
     
 class Category(Base):
     __tablename__ = 'categories'
@@ -38,6 +43,7 @@ class Category(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False, unique=True)
     description = Column(Text, nullable=True)
+    wordpress_id = Column(Integer, nullable=True)
     
     
 class SummaryCategory(Base):
@@ -48,7 +54,7 @@ class SummaryCategory(Base):
     category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)
     
     summary = relationship("Summary", back_populates="categories")
-    category = relationship("Category", back_populates="summaries")
+    category = relationship("Category")
     
 
 class Tag(Base):
@@ -57,6 +63,7 @@ class Tag(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False, unique=True)
     description = Column(Text, nullable=True)
+    wordpress_id = Column(Integer, nullable=True)
     
     
 class SummaryTag(Base):
@@ -67,7 +74,7 @@ class SummaryTag(Base):
     tag_id = Column(Integer, ForeignKey('tags.id'), nullable=False)
     
     summary = relationship("Summary", back_populates="tags")
-    tag = relationship("Tag", back_populates="summaries")
+    tag = relationship("Tag")
     
     
 class Evaluation(Base):
