@@ -1,0 +1,12 @@
+daily_workflow:
+  cron_hour: 6
+  cron_minute: 0
+  timezone: "America/Chicago"
+  max_articles_per_team: 2
+
+retry:
+  max_retries: 5
+  base_delay_seconds: 60
+
+expiry_checker:
+  interval_minutes: 60

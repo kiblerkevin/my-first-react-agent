@@ -8,4 +8,3 @@ revision_loop:
 
 approval:
   expiry_hours: 24
-  check_interval_minutes: 60

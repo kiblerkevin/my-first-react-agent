@@ -1,11 +1,13 @@
 import os
 import sys
 import json
+import time
 
 import yaml
 from flask import Flask, request, render_template_string, redirect
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 # Add project root to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,6 +21,7 @@ from utils.logger.logger import setup_logger
 load_dotenv()
 logger = setup_logger(__name__)
 
+SCHEDULER_CONFIG_PATH = 'config/scheduler.yaml'
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
 app = Flask(__name__)
@@ -174,7 +177,6 @@ def approve(token):
     memory.update_approval_status(token, 'approved')
     logger.info(f"Blog post approved: {approval['blog_title']}")
 
-    # Trigger WordPress publish
     publish_result = None
     try:
         taxonomy = json.loads(approval.get('taxonomy_data', '{}'))
@@ -229,7 +231,7 @@ def status(token):
     return render_template_string(STATUS_PAGE, approval=approval)
 
 
-# --- Background Scheduler ---
+# --- Background Jobs ---
 
 def check_expired_approvals():
     expired = memory.get_expired_approvals()
@@ -240,15 +242,57 @@ def check_expired_approvals():
         logger.info(f"Archived {len(expired)} expired approval(s).")
 
 
-def start_scheduler():
-    with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
+def run_scheduled_workflow():
+    with open(SCHEDULER_CONFIG_PATH, 'r') as f:
         config = yaml.safe_load(f)
-    interval = config['approval']['check_interval_minutes']
+
+    max_retries = config['retry']['max_retries']
+    base_delay = config['retry']['base_delay_seconds']
+    max_articles_per_team = config['daily_workflow']['max_articles_per_team']
+
+    from workflow.daily_workflow import run_daily_workflow
+
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"Daily workflow attempt {attempt + 1}/{max_retries}")
+            result = run_daily_workflow(max_articles_per_team=max_articles_per_team)
+            logger.info(
+                f"Daily workflow completed: '{result['title']}' | "
+                f"score={result['overall_score']}/10 | email_sent={result['email_sent']}"
+            )
+            return
+        except Exception as e:
+            delay = base_delay * (2 ** attempt)
+            logger.error(
+                f"Daily workflow failed (attempt {attempt + 1}/{max_retries}): {e} | "
+                f"retrying in {delay}s..."
+            )
+            if attempt < max_retries - 1:
+                time.sleep(delay)
+
+    logger.error(f"Daily workflow failed after {max_retries} attempts. Skipping today.")
+
+
+def start_scheduler():
+    with open(SCHEDULER_CONFIG_PATH, 'r') as f:
+        config = yaml.safe_load(f)
 
     scheduler = BackgroundScheduler()
-    scheduler.add_job(check_expired_approvals, 'interval', minutes=interval)
+
+    # Expiry checker
+    expiry_interval = config['expiry_checker']['interval_minutes']
+    scheduler.add_job(check_expired_approvals, 'interval', minutes=expiry_interval)
+    logger.info(f"Expiry checker started (interval: {expiry_interval} minutes)")
+
+    # Daily workflow
+    wf = config['daily_workflow']
+    scheduler.add_job(
+        run_scheduled_workflow,
+        CronTrigger(hour=wf['cron_hour'], minute=wf['cron_minute'], timezone=wf['timezone'])
+    )
+    logger.info(f"Daily workflow scheduled at {wf['cron_hour']}:{wf['cron_minute']:02d} {wf['timezone']}")
+
     scheduler.start()
-    logger.info(f"Expiry checker started (interval: {interval} minutes)")
 
 
 # --- Entry Point ---
