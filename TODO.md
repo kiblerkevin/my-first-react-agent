@@ -16,27 +16,27 @@
 13. Rejection feedback loop — Loads most recent rejection feedback into drafter and evaluator prompts
 
 ## Functional Gaps 🔧
-- [ ] F1. No-news-day handling — skip drafting when no new articles exist
+- [x] F1. No-news-day handling — skip drafting when no new articles exist
 - [ ] F2. Minimum content threshold — require N summaries across M teams before drafting
 - [ ] F3. Stale files cleanup — remove unused prompts/create_blog_post_prompt.py, empty agent stubs
 - [ ] F4. RSS collectors — wire existing RSS feeds into fetch_articles_tool
 - [ ] F5. Duplicate approval prevention — check for pending approvals before sending new ones
 
 ## Operational Gaps 📊
-- [ ] O1. Workflow run tracking — WorkflowRun table with run_id, timing, status, steps completed
+- [x] O1. Workflow run tracking — WorkflowRun table with run_id, timing, status, steps completed
 - [ ] O2. Health check endpoint — /health route on Flask server
-- [ ] O3. Token cost tracking — capture Anthropic API usage per call, accumulate per run
-- [ ] O4. Log rotation — purge log files older than retention window
-- [ ] O5. OAuth token validation — verify token before publish, handle revocation
+- [x] O3. Token cost tracking — replaced with Langfuse observability (A1)
+- [x] O4. Log rotation — purge log files older than retention window
+- [x] O5. OAuth token validation — verify token before publish, handle revocation
 
 ## Reliability Gaps 🛡️
-- [ ] R1. Per-step error recovery — checkpoint completed steps, resume from last success
+- [x] R1. Per-step error recovery — checkpoint completed steps, resume from last success
 - [ ] R2. Database backup — periodic SQLite backup or WAL mode
-- [ ] R3. API rate limiting — throttle/retry on 429 responses per API
+- [x] R3. API rate limiting — throttle/retry on 429 responses per API
 - [ ] R4. Concurrent request protection — atomic approval status updates
 
 ## Missing Agent Features 🤖
-- [ ] A1. LangSmith observability — integrate tracing for all LLM calls
+- [x] A1. Langfuse observability — @observe decorators on workflow and LLM calls, Docker self-hosted
 - [ ] A2. Agent self-reflection — let BaseAgent reason about intermediate results
 - [ ] A3. Fallback model configuration — try primary model, fall back to secondary on failure
 
@@ -45,7 +45,6 @@
 - [ ] Embeddings/cosine similarity — revisit after memory layer matures
 
 ## Notes
-- Flask server started separately: python server/approval_server.py
-- Gmail App Password required for SMTP
-- WordPress.com OAuth2 required — run /oauth/start once to authorize
+- See RUNBOOK.md for startup checklist and troubleshooting
 - Scheduler config: config/scheduler.yaml | Orchestration config: config/orchestration.yaml
+- Langfuse dashboard: http://localhost:3000 | Approval server: http://localhost:5000
