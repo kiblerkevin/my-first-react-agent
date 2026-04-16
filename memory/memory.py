@@ -394,3 +394,31 @@ class Memory:
             logger.info(f"Workflow run updated: {run_id} -> {data.get('status')}")
         finally:
             session.close()
+
+    def save_checkpoint(self, run_id: str, step_name: str, data: dict):
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            run = session.query(WorkflowRun).filter_by(run_id=run_id).first()
+            if not run:
+                return
+            checkpoint = _json.loads(run.checkpoint_data) if run.checkpoint_data else {}
+            checkpoint[step_name] = data
+            run.checkpoint_data = _json.dumps(checkpoint)
+            session.commit()
+        finally:
+            session.close()
+
+    def get_checkpoint(self, run_id: str) -> dict | None:
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            run = session.query(WorkflowRun).filter_by(run_id=run_id).first()
+            if not run or not run.checkpoint_data:
+                return None
+            return {
+                'steps_completed': _json.loads(run.steps_completed) if run.steps_completed else [],
+                'data': _json.loads(run.checkpoint_data)
+            }
+        finally:
+            session.close()

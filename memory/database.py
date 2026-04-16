@@ -166,6 +166,7 @@ class WorkflowRun(Base):
     total_output_tokens = Column(Integer, nullable=True)
     estimated_cost = Column(Float, nullable=True)
     usage_by_tool = Column(Text, nullable=True)  # JSON string
+    checkpoint_data = Column(Text, nullable=True)  # JSON string — step outputs for resume
     
     
 def get_engine(db_path='data/articles.db'):

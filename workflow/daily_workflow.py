@@ -28,20 +28,32 @@ logger = setup_logger(__name__)
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
 
-def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
+def run_daily_workflow(max_articles_per_team: int = 2, resume_run_id: str = None) -> dict:
     """
-    Runs the full daily workflow (steps 1-8):
-    fetch scores → fetch articles → deduplicate → summarize → draft → evaluate/revise → taxonomy → send approval email
-
-    Returns a dict with workflow results for logging/debugging.
+    Runs the full daily workflow (steps 1-8).
+    If resume_run_id is provided, resumes from the last completed step of that run.
     """
-    run_id = datetime.now(timezone.utc).isoformat()
     memory = Memory()
-    memory.create_workflow_run(run_id)
-    steps_completed = []
+
+    if resume_run_id:
+        run_id = resume_run_id
+        checkpoint = memory.get_checkpoint(run_id)
+        if not checkpoint:
+            logger.warning(f"No checkpoint found for {run_id} — starting fresh.")
+            checkpoint = None
+        else:
+            logger.info(f"Resuming run {run_id} from checkpoint. Steps completed: {checkpoint['steps_completed']}")
+    else:
+        run_id = datetime.now(timezone.utc).isoformat()
+        memory.create_workflow_run(run_id)
+        checkpoint = None
+
+    completed = checkpoint['steps_completed'] if checkpoint else []
+    cp_data = checkpoint['data'] if checkpoint else {}
+    steps_completed = list(completed)
 
     try:
-        return _execute_workflow(run_id, memory, steps_completed, max_articles_per_team)
+        return _execute_workflow(run_id, memory, steps_completed, cp_data, max_articles_per_team)
     except Exception as e:
         logger.error(f"Workflow {run_id} failed: {e}")
         memory.update_workflow_run(run_id, {
@@ -53,7 +65,6 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
 
 
 def _collect_usage(tools: dict) -> dict:
-    """Collect token usage from all tools that have a claude_client."""
     usage_by_tool = {}
     total_input = 0
     total_output = 0
@@ -76,7 +87,11 @@ def _collect_usage(tools: dict) -> dict:
     }
 
 
-def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_articles_per_team: int) -> dict:
+def _step_done(step_name: str, steps_completed: list) -> bool:
+    return step_name in steps_completed
+
+
+def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_data: dict, max_articles_per_team: int) -> dict:
     with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
         orchestration_config = yaml.safe_load(f)
     max_retries = orchestration_config['revision_loop']['max_retries']
@@ -107,75 +122,111 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
         logger.info("No previous rejection feedback found.")
 
     # Step 1: Fetch scores
-    logger.info("Step 1: Fetching scores...")
-    scores_output = fetch_scores_tool.execute(FetchScoresInput())
-    logger.info(f"Scores fetched: {scores_output.score_count}")
-    steps_completed.append('fetch_scores')
+    if _step_done('fetch_scores', steps_completed):
+        logger.info("Step 1: Restoring scores from checkpoint...")
+        scores_data = cp_data['fetch_scores']
+    else:
+        logger.info("Step 1: Fetching scores...")
+        scores_output = fetch_scores_tool.execute(FetchScoresInput())
+        scores_data = {'scores': scores_output.scores, 'score_count': scores_output.score_count}
+        logger.info(f"Scores fetched: {scores_data['score_count']}")
+        steps_completed.append('fetch_scores')
+        memory.save_checkpoint(run_id, 'fetch_scores', scores_data)
 
     # Step 2: Fetch articles
-    logger.info("Step 2: Fetching articles...")
-    articles_output = fetch_articles_tool.execute(FetchArticlesInput())
-    logger.info(
-        f"Articles fetched: {articles_output.article_count} total, "
-        f"{articles_output.new_article_count} new, "
-        f"{articles_output.filtered_article_count} previously seen"
-    )
-    steps_completed.append('fetch_articles')
+    if _step_done('fetch_articles', steps_completed):
+        logger.info("Step 2: Restoring articles from checkpoint...")
+        articles_data = cp_data['fetch_articles']
+    else:
+        logger.info("Step 2: Fetching articles...")
+        articles_output = fetch_articles_tool.execute(FetchArticlesInput())
+        articles_data = {
+            'articles': articles_output.articles,
+            'new_articles': articles_output.new_articles,
+            'article_count': articles_output.article_count,
+            'new_article_count': articles_output.new_article_count,
+            'filtered_article_count': articles_output.filtered_article_count
+        }
+        logger.info(
+            f"Articles fetched: {articles_data['article_count']} total, "
+            f"{articles_data['new_article_count']} new, "
+            f"{articles_data['filtered_article_count']} previously seen"
+        )
+        steps_completed.append('fetch_articles')
+        memory.save_checkpoint(run_id, 'fetch_articles', articles_data)
 
-    if articles_output.new_article_count == 0:
+    if articles_data['new_article_count'] == 0:
         logger.info("No new articles found — skipping today's workflow.")
         usage = _collect_usage(llm_tools)
         result = {
             'skipped': True,
             'skip_reason': 'No new articles found.',
             'run_id': run_id,
-            'scores_fetched': scores_output.score_count,
+            'scores_fetched': scores_data['score_count'],
             **usage
         }
         memory.update_workflow_run(run_id, {
             'status': 'skipped',
             'skip_reason': result['skip_reason'],
             'steps_completed': steps_completed,
-            'scores_fetched': scores_output.score_count,
-            'articles_fetched': articles_output.article_count,
+            'scores_fetched': scores_data['score_count'],
+            'articles_fetched': articles_data['article_count'],
             'articles_new': 0,
             **usage
         })
         return result
 
     # Step 3: Deduplicate articles
-    logger.info("Step 3: Deduplicating articles...")
-    dedup_output = deduplicate_tool.execute(DeduplicateArticlesInput(
-        articles=articles_output.new_articles
-    ))
-    logger.info(f"Duplicates removed: {dedup_output.duplicate_count}")
-    steps_completed.append('deduplicate_articles')
+    if _step_done('deduplicate_articles', steps_completed):
+        logger.info("Step 3: Restoring deduplicated articles from checkpoint...")
+        dedup_data = cp_data['deduplicate_articles']
+    else:
+        logger.info("Step 3: Deduplicating articles...")
+        dedup_output = deduplicate_tool.execute(DeduplicateArticlesInput(
+            articles=articles_data['new_articles']
+        ))
+        dedup_data = {
+            'unique_articles': dedup_output.unique_articles,
+            'duplicate_count': dedup_output.duplicate_count
+        }
+        logger.info(f"Duplicates removed: {dedup_data['duplicate_count']}")
+        steps_completed.append('deduplicate_articles')
+        memory.save_checkpoint(run_id, 'deduplicate_articles', dedup_data)
 
     # Step 4: Summarize top articles per team
-    logger.info(f"Step 4: Summarizing articles (top {max_articles_per_team} per team)...")
-    articles_by_team = defaultdict(list)
-    for article in dedup_output.unique_articles:
-        articles_by_team[article.get('team', 'Unknown')].append(article)
+    if _step_done('summarize_articles', steps_completed):
+        logger.info("Step 4: Restoring summaries from checkpoint...")
+        summaries = cp_data['summarize_articles']['summaries']
+        relevant = cp_data['summarize_articles']['relevant']
+    else:
+        logger.info(f"Step 4: Summarizing articles (top {max_articles_per_team} per team)...")
+        articles_by_team = defaultdict(list)
+        for article in dedup_data['unique_articles']:
+            articles_by_team[article.get('team', 'Unknown')].append(article)
 
-    summaries = []
-    for team, articles in articles_by_team.items():
-        top_articles = sorted(
-            articles, key=lambda a: a.get('relevance_score', 0), reverse=True
-        )[:max_articles_per_team]
+        summaries = []
+        for team, articles in articles_by_team.items():
+            top_articles = sorted(
+                articles, key=lambda a: a.get('relevance_score', 0), reverse=True
+            )[:max_articles_per_team]
 
-        for article in top_articles:
-            logger.info(f"  Summarizing [{team}]: {article.get('title', '')[:70]}")
-            summary = summarize_tool.execute(SummarizeArticleInput(
-                url=article['url'],
-                title=article['title'],
-                team=team,
-                published_at=article.get('publishedAt', '')
-            ))
-            summaries.append(summary.model_dump())
+            for article in top_articles:
+                logger.info(f"  Summarizing [{team}]: {article.get('title', '')[:70]}")
+                summary = summarize_tool.execute(SummarizeArticleInput(
+                    url=article['url'],
+                    title=article['title'],
+                    team=team,
+                    published_at=article.get('publishedAt', '')
+                ))
+                summaries.append(summary.model_dump())
 
-    relevant = [s for s in summaries if s.get('is_relevant')]
-    logger.info(f"Summaries: {len(summaries)} total, {len(relevant)} relevant")
-    steps_completed.append('summarize_articles')
+        relevant = [s for s in summaries if s.get('is_relevant')]
+        logger.info(f"Summaries: {len(summaries)} total, {len(relevant)} relevant")
+        steps_completed.append('summarize_articles')
+        memory.save_checkpoint(run_id, 'summarize_articles', {
+            'summaries': summaries,
+            'relevant': relevant
+        })
 
     if len(relevant) == 0:
         logger.info("No relevant summaries — skipping draft.")
@@ -184,75 +235,92 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
             'skipped': True,
             'skip_reason': 'No relevant article summaries after summarization.',
             'run_id': run_id,
-            'scores_fetched': scores_output.score_count,
-            'articles_fetched': articles_output.new_article_count,
+            'scores_fetched': scores_data['score_count'],
+            'articles_fetched': articles_data['new_article_count'],
             **usage
         }
         memory.update_workflow_run(run_id, {
             'status': 'skipped',
             'skip_reason': result['skip_reason'],
             'steps_completed': steps_completed,
-            'scores_fetched': scores_output.score_count,
-            'articles_fetched': articles_output.article_count,
-            'articles_new': articles_output.new_article_count,
+            'scores_fetched': scores_data['score_count'],
+            'articles_fetched': articles_data['article_count'],
+            'articles_new': articles_data['new_article_count'],
             'summaries_count': len(summaries),
             **usage
         })
         return result
 
     # Steps 5-6: Draft + evaluate with revision loop
-    logger.info("Steps 5-6: Drafting and evaluating...")
-    best_draft = None
-    best_evaluation = None
-    revision_notes = None
-    current_draft = None
-    all_evaluations = []
+    if _step_done('draft_and_evaluate', steps_completed):
+        logger.info("Steps 5-6: Restoring draft and evaluation from checkpoint...")
+        draft_eval_data = cp_data['draft_and_evaluate']
+        best_draft_data = draft_eval_data['best_draft']
+        best_eval_data = draft_eval_data['best_evaluation']
 
-    for attempt in range(max_retries):
-        logger.info(f"  Draft attempt {attempt + 1}/{max_retries}")
-
-        draft = draft_tool.execute(CreateBlogDraftInput(
-            summaries=summaries,
-            scores=scores_output.scores,
-            current_draft=current_draft,
-            revision_notes=revision_notes,
-            rejection_feedback=rejection_feedback
-        ))
-
-        evaluation = evaluate_tool.execute(EvaluateBlogPostInput(
-            title=draft.title,
-            content=draft.content,
-            excerpt=draft.excerpt,
-            summaries=summaries,
-            scores=scores_output.scores,
-            rejection_feedback=rejection_feedback
-        ))
-
-        all_evaluations.append(evaluation.model_dump())
-        logger.info(f"  Overall score: {evaluation.overall_score}/10")
-
-        if best_evaluation is None or evaluation.overall_score > best_evaluation.overall_score:
-            best_draft = draft
-            best_evaluation = evaluation
-
-        failing = {
-            criterion: suggestions
-            for criterion, suggestions in evaluation.improvement_suggestions.items()
-            if evaluation.criteria_scores.get(criterion, 0) < criterion_floors.get(criterion, 0)
-        }
-
-        if not failing:
-            logger.info(f"  All criterion floors met on attempt {attempt + 1}.")
-            break
-
-        revision_notes = failing
-        current_draft = draft.content
-        logger.info(f"  Failing criteria: {list(failing.keys())} — revising...")
+        from models.outputs.create_blog_draft_output import CreateBlogDraftOutput
+        from models.outputs.evaluate_blog_post_output import EvaluateBlogPostOutput
+        best_draft = CreateBlogDraftOutput(**best_draft_data)
+        best_evaluation = EvaluateBlogPostOutput(**best_eval_data)
+        all_evaluations = draft_eval_data['all_evaluations']
     else:
-        logger.info(f"  Max retries reached. Using best draft (score: {best_evaluation.overall_score}/10).")
+        logger.info("Steps 5-6: Drafting and evaluating...")
+        best_draft = None
+        best_evaluation = None
+        revision_notes = None
+        current_draft = None
+        all_evaluations = []
 
-    logger.info(f"Final draft: '{best_draft.title}' | score: {best_evaluation.overall_score}/10")
-    steps_completed.append('draft_and_evaluate')
+        for attempt in range(max_retries):
+            logger.info(f"  Draft attempt {attempt + 1}/{max_retries}")
+
+            draft = draft_tool.execute(CreateBlogDraftInput(
+                summaries=summaries,
+                scores=scores_data['scores'],
+                current_draft=current_draft,
+                revision_notes=revision_notes,
+                rejection_feedback=rejection_feedback
+            ))
+
+            evaluation = evaluate_tool.execute(EvaluateBlogPostInput(
+                title=draft.title,
+                content=draft.content,
+                excerpt=draft.excerpt,
+                summaries=summaries,
+                scores=scores_data['scores'],
+                rejection_feedback=rejection_feedback
+            ))
+
+            all_evaluations.append(evaluation.model_dump())
+            logger.info(f"  Overall score: {evaluation.overall_score}/10")
+
+            if best_evaluation is None or evaluation.overall_score > best_evaluation.overall_score:
+                best_draft = draft
+                best_evaluation = evaluation
+
+            failing = {
+                criterion: suggestions
+                for criterion, suggestions in evaluation.improvement_suggestions.items()
+                if evaluation.criteria_scores.get(criterion, 0) < criterion_floors.get(criterion, 0)
+            }
+
+            if not failing:
+                logger.info(f"  All criterion floors met on attempt {attempt + 1}.")
+                break
+
+            revision_notes = failing
+            current_draft = draft.content
+            logger.info(f"  Failing criteria: {list(failing.keys())} — revising...")
+        else:
+            logger.info(f"  Max retries reached. Using best draft (score: {best_evaluation.overall_score}/10).")
+
+        logger.info(f"Final draft: '{best_draft.title}' | score: {best_evaluation.overall_score}/10")
+        steps_completed.append('draft_and_evaluate')
+        memory.save_checkpoint(run_id, 'draft_and_evaluate', {
+            'best_draft': best_draft.model_dump(),
+            'best_evaluation': best_evaluation.model_dump(),
+            'all_evaluations': all_evaluations
+        })
 
     # Persist blog draft and all evaluations
     summary_id = memory.save_blog_draft({
@@ -267,33 +335,51 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
         memory.save_evaluation(summary_id, eval_data)
 
     # Step 7: Create blog taxonomy
-    logger.info("Step 7: Creating taxonomy...")
-    all_players = []
-    for s in relevant:
-        all_players.extend(s.get('players_mentioned', []))
+    if _step_done('create_taxonomy', steps_completed):
+        logger.info("Step 7: Restoring taxonomy from checkpoint...")
+        taxonomy_data = cp_data['create_taxonomy']
+    else:
+        logger.info("Step 7: Creating taxonomy...")
+        all_players = []
+        for s in relevant:
+            all_players.extend(s.get('players_mentioned', []))
 
-    taxonomy = taxonomy_tool.execute(CreateBlogTaxonomyInput(
-        teams_covered=best_draft.teams_covered,
-        players_mentioned=all_players
-    ))
-    logger.info(f"Taxonomy: {len(taxonomy.categories)} categories, {len(taxonomy.tags)} tags")
-    steps_completed.append('create_taxonomy')
+        taxonomy = taxonomy_tool.execute(CreateBlogTaxonomyInput(
+            teams_covered=best_draft.teams_covered,
+            players_mentioned=all_players
+        ))
+        taxonomy_data = {
+            'categories': taxonomy.categories,
+            'tags': taxonomy.tags
+        }
+        logger.info(f"Taxonomy: {len(taxonomy.categories)} categories, {len(taxonomy.tags)} tags")
+        steps_completed.append('create_taxonomy')
+        memory.save_checkpoint(run_id, 'create_taxonomy', taxonomy_data)
 
     # Step 8: Send approval email
-    logger.info("Step 8: Sending approval email...")
-    approval_result = approval_tool.execute(SendApprovalEmailInput(
-        title=best_draft.title,
-        content=best_draft.content,
-        excerpt=best_draft.excerpt,
-        categories=taxonomy.categories,
-        tags=taxonomy.tags,
-        evaluation_scores=best_evaluation.criteria_scores,
-        summaries=summaries,
-        scores=scores_output.scores
-    ))
-
-    logger.info(f"Approval email sent: {approval_result.email_sent} | token: {approval_result.token[:20]}...")
-    steps_completed.append('send_approval_email')
+    if _step_done('send_approval_email', steps_completed):
+        logger.info("Step 8: Approval email already sent — skipping.")
+        approval_data = cp_data['send_approval_email']
+    else:
+        logger.info("Step 8: Sending approval email...")
+        approval_result = approval_tool.execute(SendApprovalEmailInput(
+            title=best_draft.title,
+            content=best_draft.content,
+            excerpt=best_draft.excerpt,
+            categories=taxonomy_data['categories'],
+            tags=taxonomy_data['tags'],
+            evaluation_scores=best_evaluation.criteria_scores,
+            summaries=summaries,
+            scores=scores_data['scores']
+        ))
+        approval_data = {
+            'email_sent': approval_result.email_sent,
+            'token': approval_result.token,
+            'error': approval_result.error
+        }
+        logger.info(f"Approval email sent: {approval_data['email_sent']} | token: {approval_data['token'][:20]}...")
+        steps_completed.append('send_approval_email')
+        memory.save_checkpoint(run_id, 'send_approval_email', approval_data)
 
     usage = _collect_usage(llm_tools)
     logger.info(
@@ -309,21 +395,21 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
         'teams_covered': best_draft.teams_covered,
         'article_count': best_draft.article_count,
         'overall_score': best_evaluation.overall_score,
-        'email_sent': approval_result.email_sent,
-        'token': approval_result.token,
-        'error': approval_result.error,
+        'email_sent': approval_data['email_sent'],
+        'token': approval_data['token'],
+        'error': approval_data.get('error'),
         **usage
     }
 
     memory.update_workflow_run(run_id, {
         'status': 'success',
         'steps_completed': steps_completed,
-        'scores_fetched': scores_output.score_count,
-        'articles_fetched': articles_output.article_count,
-        'articles_new': articles_output.new_article_count,
+        'scores_fetched': scores_data['score_count'],
+        'articles_fetched': articles_data['article_count'],
+        'articles_new': articles_data['new_article_count'],
         'summaries_count': len(relevant),
         'overall_score': best_evaluation.overall_score,
-        'email_sent': approval_result.email_sent,
+        'email_sent': approval_data['email_sent'],
         **usage
     })
 

@@ -259,10 +259,15 @@ def run_scheduled_workflow():
 
     from workflow.daily_workflow import run_daily_workflow
 
+    failed_run_id = None
+
     for attempt in range(max_retries):
         try:
             logger.info(f"Daily workflow attempt {attempt + 1}/{max_retries}")
-            result = run_daily_workflow(max_articles_per_team=max_articles_per_team)
+            result = run_daily_workflow(
+                max_articles_per_team=max_articles_per_team,
+                resume_run_id=failed_run_id
+            )
 
             if result.get('skipped'):
                 logger.info(f"Daily workflow skipped (run_id={result.get('run_id')}): {result.get('skip_reason')}")
@@ -275,9 +280,17 @@ def run_scheduled_workflow():
             return
         except Exception as e:
             delay = base_delay * (2 ** attempt)
+            # Extract run_id from the workflow run table for resume
+            if not failed_run_id:
+                from memory.database import get_session, WorkflowRun
+                session = get_session(memory.engine)
+                last_run = session.query(WorkflowRun).filter_by(status='failed').order_by(WorkflowRun.id.desc()).first()
+                if last_run:
+                    failed_run_id = last_run.run_id
+                session.close()
             logger.error(
                 f"Daily workflow failed (attempt {attempt + 1}/{max_retries}): {e} | "
-                f"retrying in {delay}s..."
+                f"resume_run_id={failed_run_id} | retrying in {delay}s..."
             )
             if attempt < max_retries - 1:
                 time.sleep(delay)
