@@ -1,8 +1,8 @@
-import requests
 from datetime import datetime, timedelta
 
 from constants.enums import ApiSource
 from utils.article_collectors.api_collectors.api_collector import APICollector
+from utils.http import rate_limited_request
 from utils.logger.logger import setup_logger
 
 
@@ -27,7 +27,7 @@ class ESPNCollector(APICollector):
             team_scores = []
             try:
                 url = f"{self.url}/{team['sport']}/{team['league']}/scoreboard"
-                response = requests.get(url, params={'dates': date_range}, timeout=self.timeout_seconds)
+                response = rate_limited_request('GET', url, params={'dates': date_range}, timeout=self.timeout_seconds)
                 response.raise_for_status()
                 data = response.json()
 

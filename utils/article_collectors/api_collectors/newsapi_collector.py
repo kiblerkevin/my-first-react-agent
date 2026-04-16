@@ -1,8 +1,8 @@
 
-import requests
 from datetime import datetime, timedelta
 
 from utils.logger.logger import setup_logger
+from utils.http import rate_limited_request
 from constants.enums import ApiSource
 from utils.article_collectors.api_collectors.api_collector import APICollector
 
@@ -35,7 +35,7 @@ class NewsAPI_Collector(APICollector):
                     'apiKey': self.api_key
                 }
 
-                response = requests.get(self.url, params=params, timeout=self.timeout_seconds)
+                response = rate_limited_request('GET', self.url, params=params, timeout=self.timeout_seconds)
                 response.raise_for_status()
                 data = response.json()
 

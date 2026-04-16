@@ -7,6 +7,7 @@ from tools.base_tool import BaseTool
 from models.inputs.wordpress_publish_input import WordPressPublishInput
 from models.outputs.wordpress_publish_output import WordPressPublishOutput
 from memory.memory import Memory
+from utils.http import rate_limited_request
 from utils.logger.logger import setup_logger
 
 
@@ -111,7 +112,8 @@ class WordPressPublishTool(BaseTool):
                 'tags': list(tags_resolved.values())
             }
 
-            response = requests.post(
+            response = rate_limited_request(
+                'POST',
                 f"{self.base_url}/posts",
                 json=post_data,
                 headers=headers,
@@ -188,7 +190,8 @@ class WordPressPublishTool(BaseTool):
 
     def _find_taxonomy(self, taxonomy_type: str, name: str, headers: dict) -> int | None:
         try:
-            response = requests.get(
+            response = rate_limited_request(
+                'GET',
                 f"{self.base_url}/{taxonomy_type}",
                 params={'search': name, 'per_page': 10},
                 headers=headers,
@@ -205,7 +208,8 @@ class WordPressPublishTool(BaseTool):
 
     def _create_taxonomy(self, taxonomy_type: str, name: str, headers: dict) -> int | None:
         try:
-            response = requests.post(
+            response = rate_limited_request(
+                'POST',
                 f"{self.base_url}/{taxonomy_type}",
                 json={'name': name},
                 headers=headers,

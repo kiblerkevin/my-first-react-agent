@@ -1,13 +1,18 @@
-from anthropic import Anthropic
+from anthropic import Anthropic, RateLimitError
 from typing import List, Dict
 from dotenv import load_dotenv
 from anthropic.types import Message
 import os
+import time
 import yaml
 
 load_dotenv()
 
 LLMS_CONFIG_PATH = 'config/llms.yaml'
+ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
+
+from utils.logger.logger import setup_logger
+logger = setup_logger(__name__)
 
 
 class ClaudeClient:
@@ -27,6 +32,11 @@ class ClaudeClient:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.call_count = 0
+
+        with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
+            rl_config = yaml.safe_load(f).get('rate_limiting', {})
+        self._rl_max_retries = rl_config.get('max_retries', 3)
+        self._rl_base_delay = rl_config.get('base_delay_seconds', 1.0)
 
     def _track_usage(self, response):
         if hasattr(response, 'usage') and response.usage:
@@ -54,30 +64,46 @@ class ClaudeClient:
             messages: List[Dict[str, str]],
             tools
     ) -> Message:
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                system=self.system_prompt,
-                messages=messages,
-                tools=tools
-            )
-            self._track_usage(response)
-            return response
-        except Exception as e:
-            raise Exception(f"Failed to create message: {str(e)}")
+        for attempt in range(self._rl_max_retries + 1):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    system=self.system_prompt,
+                    messages=messages,
+                    tools=tools
+                )
+                self._track_usage(response)
+                return response
+            except RateLimitError as e:
+                if attempt < self._rl_max_retries:
+                    delay = self._rl_base_delay * (2 ** attempt)
+                    logger.warning(f"Anthropic rate limited — retrying in {delay:.1f}s (attempt {attempt + 1}/{self._rl_max_retries})")
+                    time.sleep(delay)
+                else:
+                    raise Exception(f"Anthropic rate limit exceeded after {self._rl_max_retries} retries: {str(e)}")
+            except Exception as e:
+                raise Exception(f"Failed to create message: {str(e)}")
 
     def send_message(self, user_message: str) -> str:
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=self.max_tokens,
-                temperature=self.temperature,
-                system=self.system_prompt,
-                messages=[{"role": "user", "content": user_message}]
-            )
-            self._track_usage(response)
-            return response.content[0].text
-        except Exception as e:
-            raise Exception(f"Failed to create message: {str(e)}")
+        for attempt in range(self._rl_max_retries + 1):
+            try:
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    system=self.system_prompt,
+                    messages=[{"role": "user", "content": user_message}]
+                )
+                self._track_usage(response)
+                return response.content[0].text
+            except RateLimitError as e:
+                if attempt < self._rl_max_retries:
+                    delay = self._rl_base_delay * (2 ** attempt)
+                    logger.warning(f"Anthropic rate limited — retrying in {delay:.1f}s (attempt {attempt + 1}/{self._rl_max_retries})")
+                    time.sleep(delay)
+                else:
+                    raise Exception(f"Anthropic rate limit exceeded after {self._rl_max_retries} retries: {str(e)}")
+            except Exception as e:
+                raise Exception(f"Failed to create message: {str(e)}")

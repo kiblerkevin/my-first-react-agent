@@ -1,6 +1,5 @@
 import json
 import yaml
-import requests
 from bs4 import BeautifulSoup
 
 from tools.base_tool import BaseTool
@@ -9,6 +8,7 @@ from models.outputs.summarize_article_output import SummarizeArticleOutput
 from agent.claude_client import ClaudeClient
 from prompts.summarize_article_prompt import SUMMARIZE_ARTICLE_PROMPT
 from memory.memory import Memory
+from utils.http import rate_limited_request
 from utils.logger.logger import setup_logger
 
 
@@ -113,7 +113,7 @@ class SummarizeArticleTool(BaseTool):
 
     def _fetch_content(self, url: str) -> str | None:
         try:
-            response = requests.get(url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+            response = rate_limited_request('GET', url, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
 
