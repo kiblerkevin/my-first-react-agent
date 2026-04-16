@@ -365,6 +365,11 @@ class Memory:
             run.summaries_count = data.get('summaries_count')
             run.overall_score = data.get('overall_score')
             run.email_sent = data.get('email_sent')
+            run.total_input_tokens = data.get('total_input_tokens')
+            run.total_output_tokens = data.get('total_output_tokens')
+            run.estimated_cost = data.get('estimated_cost')
+            if data.get('usage_by_tool'):
+                run.usage_by_tool = _json.dumps(data['usage_by_tool'])
             session.commit()
             logger.info(f"Workflow run updated: {run_id} -> {data.get('status')}")
         finally:

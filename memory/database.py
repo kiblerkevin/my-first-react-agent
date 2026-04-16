@@ -162,6 +162,10 @@ class WorkflowRun(Base):
     summaries_count = Column(Integer, nullable=True)
     overall_score = Column(Float, nullable=True)
     email_sent = Column(Boolean, nullable=True)
+    total_input_tokens = Column(Integer, nullable=True)
+    total_output_tokens = Column(Integer, nullable=True)
+    estimated_cost = Column(Float, nullable=True)
+    usage_by_tool = Column(Text, nullable=True)  # JSON string
     
     
 def get_engine(db_path='data/articles.db'):

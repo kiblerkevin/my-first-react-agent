@@ -68,6 +68,8 @@ class SummarizeArticleTool(BaseTool):
         self.claude_client.model = summarizer_config['model']
         self.claude_client.temperature = summarizer_config['temperature']
         self.claude_client.max_tokens = summarizer_config['max_tokens']
+        self.claude_client.cost_per_million_input = summarizer_config.get('cost_per_million_input', 0.0)
+        self.claude_client.cost_per_million_output = summarizer_config.get('cost_per_million_output', 0.0)
         self.memory = Memory()
 
     def execute(self, input: SummarizeArticleInput) -> SummarizeArticleOutput:

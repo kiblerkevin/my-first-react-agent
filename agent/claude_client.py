@@ -21,6 +21,33 @@ class ClaudeClient:
         self.model = config['claude']['model']
         self.temperature = config['claude']['temperature']
         self.max_tokens = config['claude']['max_tokens']
+        self.cost_per_million_input = config['claude'].get('cost_per_million_input', 0.0)
+        self.cost_per_million_output = config['claude'].get('cost_per_million_output', 0.0)
+
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.call_count = 0
+
+    def _track_usage(self, response):
+        if hasattr(response, 'usage') and response.usage:
+            self.total_input_tokens += response.usage.input_tokens
+            self.total_output_tokens += response.usage.output_tokens
+            self.call_count += 1
+
+    def get_usage(self) -> dict:
+        input_cost = (self.total_input_tokens / 1_000_000) * self.cost_per_million_input
+        output_cost = (self.total_output_tokens / 1_000_000) * self.cost_per_million_output
+        return {
+            'input_tokens': self.total_input_tokens,
+            'output_tokens': self.total_output_tokens,
+            'call_count': self.call_count,
+            'estimated_cost': round(input_cost + output_cost, 6)
+        }
+
+    def reset_usage(self):
+        self.total_input_tokens = 0
+        self.total_output_tokens = 0
+        self.call_count = 0
 
     def send_messages_with_tools(
             self,
@@ -28,7 +55,7 @@ class ClaudeClient:
             tools
     ) -> Message:
         try:
-            return self.client.messages.create(
+            response = self.client.messages.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
@@ -36,6 +63,8 @@ class ClaudeClient:
                 messages=messages,
                 tools=tools
             )
+            self._track_usage(response)
+            return response
         except Exception as e:
             raise Exception(f"Failed to create message: {str(e)}")
 
@@ -48,6 +77,7 @@ class ClaudeClient:
                 system=self.system_prompt,
                 messages=[{"role": "user", "content": user_message}]
             )
+            self._track_usage(response)
             return response.content[0].text
         except Exception as e:
             raise Exception(f"Failed to create message: {str(e)}")

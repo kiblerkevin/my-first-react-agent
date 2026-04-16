@@ -52,6 +52,30 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
         raise
 
 
+def _collect_usage(tools: dict) -> dict:
+    """Collect token usage from all tools that have a claude_client."""
+    usage_by_tool = {}
+    total_input = 0
+    total_output = 0
+    total_cost = 0.0
+
+    for name, tool in tools.items():
+        if hasattr(tool, 'claude_client'):
+            usage = tool.claude_client.get_usage()
+            if usage['call_count'] > 0:
+                usage_by_tool[name] = usage
+                total_input += usage['input_tokens']
+                total_output += usage['output_tokens']
+                total_cost += usage['estimated_cost']
+
+    return {
+        'usage_by_tool': usage_by_tool,
+        'total_input_tokens': total_input,
+        'total_output_tokens': total_output,
+        'estimated_cost': round(total_cost, 6)
+    }
+
+
 def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_articles_per_team: int) -> dict:
     with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
         orchestration_config = yaml.safe_load(f)
@@ -66,6 +90,12 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
     evaluate_tool = EvaluateBlogPostTool()
     taxonomy_tool = CreateBlogTaxonomyTool()
     approval_tool = SendApprovalEmailTool()
+
+    llm_tools = {
+        'summarize_article': summarize_tool,
+        'create_blog_draft': draft_tool,
+        'evaluate_blog_post': evaluate_tool
+    }
 
     # Load most recent rejection feedback
     rejection_feedback = None
@@ -94,11 +124,13 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
 
     if articles_output.new_article_count == 0:
         logger.info("No new articles found — skipping today's workflow.")
+        usage = _collect_usage(llm_tools)
         result = {
             'skipped': True,
             'skip_reason': 'No new articles found.',
             'run_id': run_id,
-            'scores_fetched': scores_output.score_count
+            'scores_fetched': scores_output.score_count,
+            **usage
         }
         memory.update_workflow_run(run_id, {
             'status': 'skipped',
@@ -106,7 +138,8 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
             'steps_completed': steps_completed,
             'scores_fetched': scores_output.score_count,
             'articles_fetched': articles_output.article_count,
-            'articles_new': 0
+            'articles_new': 0,
+            **usage
         })
         return result
 
@@ -146,12 +179,14 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
 
     if len(relevant) == 0:
         logger.info("No relevant summaries — skipping draft.")
+        usage = _collect_usage(llm_tools)
         result = {
             'skipped': True,
             'skip_reason': 'No relevant article summaries after summarization.',
             'run_id': run_id,
             'scores_fetched': scores_output.score_count,
-            'articles_fetched': articles_output.new_article_count
+            'articles_fetched': articles_output.new_article_count,
+            **usage
         }
         memory.update_workflow_run(run_id, {
             'status': 'skipped',
@@ -160,7 +195,8 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
             'scores_fetched': scores_output.score_count,
             'articles_fetched': articles_output.article_count,
             'articles_new': articles_output.new_article_count,
-            'summaries_count': len(summaries)
+            'summaries_count': len(summaries),
+            **usage
         })
         return result
 
@@ -259,6 +295,12 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
     logger.info(f"Approval email sent: {approval_result.email_sent} | token: {approval_result.token[:20]}...")
     steps_completed.append('send_approval_email')
 
+    usage = _collect_usage(llm_tools)
+    logger.info(
+        f"Token usage: {usage['total_input_tokens']} input, {usage['total_output_tokens']} output, "
+        f"${usage['estimated_cost']:.4f} estimated cost"
+    )
+
     result = {
         'skipped': False,
         'skip_reason': None,
@@ -269,7 +311,8 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
         'overall_score': best_evaluation.overall_score,
         'email_sent': approval_result.email_sent,
         'token': approval_result.token,
-        'error': approval_result.error
+        'error': approval_result.error,
+        **usage
     }
 
     memory.update_workflow_run(run_id, {
@@ -280,7 +323,8 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
         'articles_new': articles_output.new_article_count,
         'summaries_count': len(relevant),
         'overall_score': best_evaluation.overall_score,
-        'email_sent': approval_result.email_sent
+        'email_sent': approval_result.email_sent,
+        **usage
     })
 
     return result

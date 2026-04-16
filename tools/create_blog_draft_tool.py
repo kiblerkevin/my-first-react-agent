@@ -69,6 +69,8 @@ class CreateBlogDraftTool(BaseTool):
         self.claude_client.model = drafter_config['model']
         self.claude_client.temperature = drafter_config['temperature']
         self.claude_client.max_tokens = drafter_config['max_tokens']
+        self.claude_client.cost_per_million_input = drafter_config.get('cost_per_million_input', 0.0)
+        self.claude_client.cost_per_million_output = drafter_config.get('cost_per_million_output', 0.0)
 
     def execute(self, input: CreateBlogDraftInput) -> CreateBlogDraftOutput:
         today = datetime.now(timezone.utc).date()
