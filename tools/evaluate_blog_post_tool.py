@@ -73,8 +73,6 @@ class EvaluateBlogPostTool(BaseTool):
         self.claude_client.model = evaluator_config['model']
         self.claude_client.temperature = evaluator_config['temperature']
         self.claude_client.max_tokens = evaluator_config['max_tokens']
-        self.claude_client.cost_per_million_input = evaluator_config.get('cost_per_million_input', 0.0)
-        self.claude_client.cost_per_million_output = evaluator_config.get('cost_per_million_output', 0.0)
 
     def execute(self, input: EvaluateBlogPostInput) -> EvaluateBlogPostOutput:
         evaluation_id = datetime.now(timezone.utc).isoformat()

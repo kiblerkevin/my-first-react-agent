@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  langfuse:
+    image: langfuse/langfuse:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://langfuse:langfuse@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=my-secret-key-change-in-production
+      - NEXTAUTH_URL=http://localhost:3000
+      - SALT=my-salt-change-in-production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=langfuse
+      - POSTGRES_PASSWORD=langfuse
+      - POSTGRES_DB=langfuse
+    ports:
+      - "5432:5432"
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  langfuse_postgres_data:
