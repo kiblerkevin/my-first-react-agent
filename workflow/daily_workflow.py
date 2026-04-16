@@ -327,4 +327,7 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_ar
         **usage
     })
 
+    # Housekeeping
+    memory.purge_old_logs()
+
     return result

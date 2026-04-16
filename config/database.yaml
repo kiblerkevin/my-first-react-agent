@@ -1,6 +1,7 @@
 database:
   path: "data/articles.db"
   retention_days: 30
+  log_retention_days: 30
 
 taxonomy:
   default_category: "Daily Recap"

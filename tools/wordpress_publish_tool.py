@@ -73,9 +73,32 @@ class WordPressPublishTool(BaseTool):
             )
         return {'Authorization': f'Bearer {token}'}
 
+    def _validate_token(self, headers: dict) -> bool:
+        try:
+            response = requests.get(
+                f"{self.base_url}/users/me",
+                headers=headers,
+                timeout=10
+            )
+            if response.status_code == 200:
+                return True
+            logger.warning(f"OAuth token validation failed: {response.status_code}")
+            return False
+        except Exception as e:
+            logger.warning(f"OAuth token validation error: {e}")
+            return False
+
     def execute(self, input: WordPressPublishInput) -> WordPressPublishOutput:
         try:
             headers = self._get_headers()
+
+            if not self._validate_token(headers):
+                error_msg = (
+                    "WordPress OAuth token is invalid or revoked. "
+                    "Re-authorize by visiting /oauth/start on the approval server."
+                )
+                logger.error(error_msg)
+                return WordPressPublishOutput(error=error_msg)
             categories_resolved = self._resolve_categories(input.categories, headers)
             tags_resolved = self._resolve_tags(input.tags, headers)
 
@@ -107,6 +130,18 @@ class WordPressPublishTool(BaseTool):
             logger.info(f"Draft published: post_id={output.post_id}, url={output.post_url}")
             return output
 
+        except RuntimeError:
+            raise
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code in (401, 403):
+                error_msg = (
+                    f"WordPress API returned {e.response.status_code} — token may be revoked. "
+                    "Re-authorize by visiting /oauth/start on the approval server."
+                )
+            else:
+                error_msg = str(e)
+            logger.error(f"Error publishing to WordPress: {error_msg}")
+            return WordPressPublishOutput(error=error_msg)
         except Exception as e:
             logger.error(f"Error publishing to WordPress: {e}")
             return WordPressPublishOutput(error=str(e))

@@ -15,6 +15,7 @@ class Memory:
             config = yaml.safe_load(f)
         db_path = config['database']['path']
         self.retention_days = config['database'].get('retention_days', 30)
+        self.log_retention_days = config['database'].get('log_retention_days', 30)
         self.engine = init_db(db_path)
 
     def get_seen_urls(self) -> set:
@@ -67,6 +68,25 @@ class Memory:
                 logger.info(f"Purged {count} articles older than {self.retention_days} days.")
         finally:
             session.close()
+
+    def purge_old_logs(self):
+        import os
+        from datetime import datetime, timedelta
+        cutoff = datetime.utcnow() - timedelta(days=self.log_retention_days)
+        log_dir = 'logs'
+        if not os.path.exists(log_dir):
+            return
+        count = 0
+        for filename in os.listdir(log_dir):
+            filepath = os.path.join(log_dir, filename)
+            if not os.path.isfile(filepath):
+                continue
+            modified = datetime.utcfromtimestamp(os.path.getmtime(filepath))
+            if modified < cutoff:
+                os.remove(filepath)
+                count += 1
+        if count:
+            logger.info(f"Purged {count} log file(s) older than {self.log_retention_days} days.")
 
     def get_or_create_category(self, name: str) -> dict:
         session = get_session(self.engine)

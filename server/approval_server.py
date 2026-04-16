@@ -199,6 +199,13 @@ def approve(token):
     post_info = ""
     if publish_result and publish_result.post_id:
         post_info = f"<p>WordPress draft created: <a href='{publish_result.post_url}'>{publish_result.post_url}</a></p>"
+    elif publish_result and publish_result.error and 'oauth' in publish_result.error.lower():
+        post_info = (
+            "<p style='color: #dc3545;'><strong>WordPress publish failed:</strong> OAuth token is invalid or revoked. "
+            "<a href='/oauth/start'>Re-authorize WordPress</a> and try again.</p>"
+        )
+    elif publish_result and publish_result.error:
+        post_info = f"<p style='color: #dc3545;'><strong>WordPress publish failed:</strong> {publish_result.error}</p>"
 
     return render_template_string(APPROVED_PAGE, title=title, post_info=post_info)
 
