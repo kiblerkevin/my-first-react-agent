@@ -37,12 +37,45 @@
 
 ## Missing Agent Features 🤖
 - [x] A1. Langfuse observability — @observe decorators on workflow and LLM calls, Docker self-hosted
-- [ ] A2. Agent self-reflection — let BaseAgent reason about intermediate results
+- [ ] A2. Agent self-reflection — starting with revision loop only (see design notes below)
 - [ ] A3. Fallback model configuration — try primary model, fall back to secondary on failure
 
-## Design Decisions to Revisit
-- [ ] Revision loop as tool vs orchestration — revisit after agent self-reflection (A2)
-- [ ] Embeddings/cosine similarity — revisit after memory layer matures
+## Design Decisions
+
+### A2. Agent Self-Reflection — Phased Approach
+
+**Phase 1 (current scope): Revision loop only**
+- Replace the procedural for/else revision loop in daily_workflow.py with a BaseAgent
+  that has access to create_blog_draft and evaluate_blog_post tools
+- Agent receives evaluation scores and decides revision strategy — e.g. "accuracy is 9.5
+  but SEO is 5.0, I should only revise the title and excerpt, not the full content"
+- Uses Haiku for orchestration reasoning (drafting/evaluation still use Sonnet tools)
+- Hard limit on total tool calls per session to prevent runaway loops
+- Pre-loaded context: rejection feedback and criterion floors passed in system prompt
+
+**Phase 2 (future): Full workflow agent**
+- Expand the agent to manage the entire workflow (steps 1-8), not just revision
+- This is when the revision-loop-as-tool design decision gets revisited
+
+**Memory access: pre-loaded context vs memory tool**
+- Current decision: pre-loaded context (rejection feedback loaded at workflow start)
+- Reasoning: the revision loop is a focused task — the agent only needs "what failed and
+  why" to decide how to revise. Adding a memory query tool adds LLM call overhead without
+  clear payoff for this narrow scope.
+- Future state: when the agent manages the full workflow (Phase 2), a memory tool becomes
+  valuable — the agent could check historical evaluation trends, discover systemic prompt
+  issues (e.g. "SEO has failed 4 of 5 runs"), and decide whether to revise or escalate.
+  At that point, add a query_memory tool with methods like get_recent_evaluations(n),
+  get_rejection_history(n), get_average_scores_by_criterion(days).
+
+### Revision loop: tool vs orchestration
+- Original decision: keep in orchestration (main.py/daily_workflow.py)
+- A2 Phase 1 moves it into an agent — this partially addresses the design question
+- Full resolution deferred to Phase 2 when the agent manages the entire workflow
+
+### Embeddings/cosine similarity
+- Deferred until memory layer matures and there's enough article history to benefit
+  from semantic deduplication over fuzzy title matching
 
 ## Notes
 - See RUNBOOK.md for startup checklist and troubleshooting

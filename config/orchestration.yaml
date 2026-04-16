@@ -1,5 +1,6 @@
 revision_loop:
   max_retries: 3
+  max_tool_calls: 10
   criterion_floors:
     accuracy: 8.0
     completeness: 7.0

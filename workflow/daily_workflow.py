@@ -7,19 +7,16 @@ from langfuse import observe
 from models.inputs.fetch_articles_input import FetchArticlesInput
 from models.inputs.fetch_scores_input import FetchScoresInput
 from models.inputs.summarize_article_input import SummarizeArticleInput
-from models.inputs.create_blog_draft_input import CreateBlogDraftInput
 from models.inputs.deduplicate_articles_input import DeduplicateArticlesInput
-from models.inputs.evaluate_blog_post_input import EvaluateBlogPostInput
 from models.inputs.create_blog_taxonomy_input import CreateBlogTaxonomyInput
 from models.inputs.send_approval_email_input import SendApprovalEmailInput
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
-from tools.create_blog_draft_tool import CreateBlogDraftTool
 from tools.deduplicate_articles_tool import DeduplicateArticlesTool
-from tools.evaluate_blog_post_tool import EvaluateBlogPostTool
 from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
 from tools.send_approval_email_tool import SendApprovalEmailTool
+from agent.revision_agent import RevisionAgent
 from memory.memory import Memory
 from utils.logger.logger import setup_logger
 
@@ -74,15 +71,11 @@ def _step_done(step_name: str, steps_completed: list) -> bool:
 def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_data: dict, max_articles_per_team: int) -> dict:
     with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
         orchestration_config = yaml.safe_load(f)
-    max_retries = orchestration_config['revision_loop']['max_retries']
-    criterion_floors = orchestration_config['revision_loop']['criterion_floors']
 
     fetch_articles_tool = FetchArticlesTool()
     fetch_scores_tool = FetchScoresTool()
     summarize_tool = SummarizeArticleTool()
-    draft_tool = CreateBlogDraftTool()
     deduplicate_tool = DeduplicateArticlesTool()
-    evaluate_tool = EvaluateBlogPostTool()
     taxonomy_tool = CreateBlogTaxonomyTool()
     approval_tool = SendApprovalEmailTool()
 
@@ -219,7 +212,7 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
         })
         return result
 
-    # Steps 5-6: Draft + evaluate with revision loop
+    # Steps 5-6: Draft + evaluate via revision agent
     if _step_done('draft_and_evaluate', steps_completed):
         logger.info("Steps 5-6: Restoring draft and evaluation from checkpoint...")
         draft_eval_data = cp_data['draft_and_evaluate']
@@ -232,55 +225,19 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
         best_evaluation = EvaluateBlogPostOutput(**best_eval_data)
         all_evaluations = draft_eval_data['all_evaluations']
     else:
-        logger.info("Steps 5-6: Drafting and evaluating...")
-        best_draft = None
-        best_evaluation = None
-        revision_notes = None
-        current_draft = None
-        all_evaluations = []
+        logger.info("Steps 5-6: Starting revision agent...")
+        revision_agent = RevisionAgent()
+        agent_result = revision_agent.run(
+            summaries=summaries,
+            scores=scores_data['scores'],
+            rejection_feedback=rejection_feedback
+        )
 
-        for attempt in range(max_retries):
-            logger.info(f"  Draft attempt {attempt + 1}/{max_retries}")
-
-            draft = draft_tool.execute(CreateBlogDraftInput(
-                summaries=summaries,
-                scores=scores_data['scores'],
-                current_draft=current_draft,
-                revision_notes=revision_notes,
-                rejection_feedback=rejection_feedback
-            ))
-
-            evaluation = evaluate_tool.execute(EvaluateBlogPostInput(
-                title=draft.title,
-                content=draft.content,
-                excerpt=draft.excerpt,
-                summaries=summaries,
-                scores=scores_data['scores'],
-                rejection_feedback=rejection_feedback
-            ))
-
-            all_evaluations.append(evaluation.model_dump())
-            logger.info(f"  Overall score: {evaluation.overall_score}/10")
-
-            if best_evaluation is None or evaluation.overall_score > best_evaluation.overall_score:
-                best_draft = draft
-                best_evaluation = evaluation
-
-            failing = {
-                criterion: suggestions
-                for criterion, suggestions in evaluation.improvement_suggestions.items()
-                if evaluation.criteria_scores.get(criterion, 0) < criterion_floors.get(criterion, 0)
-            }
-
-            if not failing:
-                logger.info(f"  All criterion floors met on attempt {attempt + 1}.")
-                break
-
-            revision_notes = failing
-            current_draft = draft.content
-            logger.info(f"  Failing criteria: {list(failing.keys())} — revising...")
-        else:
-            logger.info(f"  Max retries reached. Using best draft (score: {best_evaluation.overall_score}/10).")
+        from models.outputs.create_blog_draft_output import CreateBlogDraftOutput
+        from models.outputs.evaluate_blog_post_output import EvaluateBlogPostOutput
+        best_draft = CreateBlogDraftOutput(**agent_result['best_draft'])
+        best_evaluation = EvaluateBlogPostOutput(**agent_result['best_evaluation'])
+        all_evaluations = agent_result['all_evaluations']
 
         logger.info(f"Final draft: '{best_draft.title}' | score: {best_evaluation.overall_score}/10")
         steps_completed.append('draft_and_evaluate')

@@ -37,11 +37,12 @@ class ClaudeClient:
     def send_messages_with_tools(
             self,
             messages: List[Dict[str, str]],
-            tools
+            tools,
+            tool_choice: dict = None
     ) -> Message:
         for attempt in range(self._rl_max_retries + 1):
             try:
-                response = self.client.messages.create(
+                kwargs = dict(
                     model=self.model,
                     max_tokens=self.max_tokens,
                     temperature=self.temperature,
@@ -49,6 +50,9 @@ class ClaudeClient:
                     messages=messages,
                     tools=tools
                 )
+                if tool_choice:
+                    kwargs['tool_choice'] = tool_choice
+                response = self.client.messages.create(**kwargs)
                 return response
             except RateLimitError as e:
                 if attempt < self._rl_max_retries:

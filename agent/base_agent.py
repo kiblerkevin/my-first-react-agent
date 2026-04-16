@@ -12,14 +12,23 @@ from agent.context_window import (
     ToolResultMessage
 )
 from typing import List, Dict
+from utils.logger.logger import setup_logger
+
+logger = setup_logger(__name__)
+
 
 class BaseAgent:
     def __init__(self,
                  context: ContextWindow,
-                 claude_client: ClaudeClient):
+                 claude_client: ClaudeClient,
+                 max_tool_calls: int = None,
+                 force_first_tool: str = None):
         self.claude_client = claude_client
         self.context = context
-        self.tools = {}  # Define any tools the agent might use here
+        self.tools = {}
+        self.max_tool_calls = max_tool_calls
+        self.tool_call_count = 0
+        self.force_first_tool = force_first_tool
 
     def send_message(self, user_message: str) -> str:
         self.context.add(UserMessage(content=user_message))
@@ -28,45 +37,69 @@ class BaseAgent:
         return response
     
     def act(self) -> str:
+        if self.max_tool_calls and self.tool_call_count >= self.max_tool_calls:
+            logger.warning(f"Tool call limit reached ({self.max_tool_calls}). Stopping agent.")
+            return "Tool call limit reached. Returning best available result."
+
+        # Force tool use on first call if configured
+        tool_choice = None
+        if self.force_first_tool and self.tool_call_count == 0:
+            tool_choice = {"type": "tool", "name": self.force_first_tool}
+
         response = self.claude_client.send_messages_with_tools(
             messages=[msg.model_dump() for msg in self.context.conversation_history],
             tools=[{
                     "name": tool.name,
                     "description": tool.description,
                     "input_schema": tool.input_schema
-                } for tool in self.tools.values()]
+                } for tool in self.tools.values()],
+            tool_choice=tool_choice
         )
         
         tool_use_id = 1
         
-        if response.stop_reason == "tool_use":
-            # Add tool use to context
+        # Check if response contains tool use blocks
+        has_tool_use = any(
+            getattr(block, 'type', None) == 'tool_use'
+            for block in (response.content or [])
+        )
+
+        if has_tool_use:
             for content_block in response.content:
                 if content_block.type == "tool_use":
-                    # Add tool use message
+                    if self.max_tool_calls and self.tool_call_count >= self.max_tool_calls:
+                        logger.warning(f"Tool call limit reached mid-response ({self.max_tool_calls}). Stopping.")
+                        tool_result = ToolResult(
+                            tool_use_id=str(tool_use_id),
+                            content="Tool call limit reached. Please return your best result now.",
+                            is_error=True
+                        )
+                        tool_result_message = ToolResultMessage(content=[tool_result])
+                        self.context.add(tool_result_message)
+                        return self.act()
+
                     tool_use = ToolUse(id=str(tool_use_id), name=content_block.name, input=content_block.input)
                     tool_use_msg = ToolUseMessage(content=[tool_use])
                     self.context.add(tool_use_msg)
 
-                    # Display tool use in orange box
-                    # self._print_tool_use(tool_use)
                     tool_result_response = self._execute_tool(tool_use.name, tool_use.input)
+                    self.tool_call_count += 1
+                    logger.info(f"Tool call {self.tool_call_count}/{self.max_tool_calls or '∞'}: {tool_use.name}")
 
-                    # Add tool result to context
                     tool_result = ToolResult(tool_use_id=str(tool_use_id), content=tool_result_response, is_error=False)
                     tool_result_message = ToolResultMessage(content=[tool_result])
                     self.context.add(tool_result_message)
-
-                    # Display tool result in red box
-                    # self._print_tool_result(tool_result)
                     
                     tool_use_id += 1
-                    
 
-            # Make another API call to continue the conversation
             return self.act()
         
-        return response.content[0].text if response.content else ""
+        # Extract text from response, handling mixed content blocks
+        for block in (response.content or []):
+            if hasattr(block, 'text'):
+                return block.text
+        return ""
+
     def _execute_tool(self, tool_name: str, tool_input: dict) -> str:
         try:
             tool = self.tools[tool_name]
