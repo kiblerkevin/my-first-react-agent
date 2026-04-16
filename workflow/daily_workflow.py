@@ -15,7 +15,7 @@ from tools.fetch_scores_tool import FetchScoresTool
 from tools.summarize_article_tool import SummarizeArticleTool
 from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
-from tools.send_approval_email_tool import SendApprovalEmailTool
+from tools.send_approval_email_tool import SendApprovalEmailTool, send_failure_email
 from agent.revision_agent import RevisionAgent
 from memory.memory import Memory
 from utils.logger.logger import setup_logger
@@ -60,6 +60,11 @@ def run_daily_workflow(max_articles_per_team: int = 2, resume_run_id: str = None
             'error': str(e),
             'steps_completed': steps_completed
         })
+        send_failure_email(
+            run_id=run_id,
+            error=str(e),
+            steps_completed=steps_completed
+        )
         raise
 
 

@@ -173,14 +173,105 @@ class SendApprovalEmailTool(BaseTool):
         </html>
         """
 
-    def _send_email(self, subject: str, html_content: str):
+    def _send_email(self, subject: str, html_content: str, recipient: str = None):
         msg = MIMEMultipart('alternative')
         msg['Subject'] = f"[Approval Required] {subject}"
         msg['From'] = self.email_from
-        msg['To'] = self.email_to
+        msg['To'] = recipient or self.email_to
         msg.attach(MIMEText(html_content, 'html'))
 
         with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
             server.starttls()
             server.login(self.email_from, self.email_password)
-            server.sendmail(self.email_from, self.email_to, msg.as_string())
+            server.sendmail(self.email_from, recipient or self.email_to, msg.as_string())
+
+
+def send_failure_email(run_id: str, error: str, steps_completed: list, context: dict = None):
+    """
+    Sends a failure notification email when the workflow fails.
+    Standalone function — not a tool, not agent-callable.
+    """
+    load_dotenv()
+
+    with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
+        config = yaml.safe_load(f)
+
+    if not config.get('failure_notification', {}).get('enabled', False):
+        logger.info("Failure notification disabled — skipping email.")
+        return
+
+    smtp_server = os.getenv('EMAIL_SMTP_SERVER')
+    smtp_port = int(os.getenv('EMAIL_SMTP_PORT', 587))
+    email_from = os.getenv('EMAIL_FROM')
+    email_password = os.getenv('EMAIL_PASSWORD')
+    error_email_to = os.getenv('ERROR_EMAIL_TO', os.getenv('EMAIL_TO'))
+
+    timestamp = datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')
+
+    # Determine which step failed
+    all_steps = ['fetch_scores', 'fetch_articles', 'deduplicate_articles',
+                 'summarize_articles', 'draft_and_evaluate', 'create_taxonomy', 'send_approval_email']
+    failed_step = 'unknown'
+    for step in all_steps:
+        if step not in steps_completed:
+            failed_step = step
+            break
+
+    # Build context rows
+    context_html = ""
+    if context:
+        context_html = "<h2>Partial Data</h2><table border='1' cellpadding='8' cellspacing='0'>"
+        for key, value in context.items():
+            context_html += f"<tr><td><strong>{key}</strong></td><td>{value}</td></tr>"
+        context_html += "</table>"
+
+    steps_html = ""
+    for step in all_steps:
+        if step in steps_completed:
+            steps_html += f"<tr><td>✅</td><td>{step}</td></tr>"
+        elif step == failed_step:
+            steps_html += f"<tr><td>❌</td><td><strong>{step}</strong> (failed)</td></tr>"
+        else:
+            steps_html += f"<tr><td>⏭️</td><td>{step} (skipped)</td></tr>"
+
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+        <h1 style="color: #dc3545;">⚠️ Workflow Failed</h1>
+        <p><strong>Run ID:</strong> {run_id}</p>
+        <p><strong>Time:</strong> {timestamp}</p>
+        <p><strong>Failed at step:</strong> {failed_step}</p>
+
+        <h2>Error</h2>
+        <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">{error}</pre>
+
+        <h2>Steps</h2>
+        <table border='1' cellpadding='8' cellspacing='0'>
+            <tr><th>Status</th><th>Step</th></tr>
+            {steps_html}
+        </table>
+
+        {context_html}
+
+        <p style="color: #666; font-size: 12px; margin-top: 30px;">
+            To resume this run: <code>python main.py --resume {run_id}</code>
+        </p>
+    </body>
+    </html>
+    """
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"[Workflow Failed] Chicago Sports Recap — {failed_step}"
+        msg['From'] = email_from
+        msg['To'] = error_email_to
+        msg.attach(MIMEText(html, 'html'))
+
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(email_from, email_password)
+            server.sendmail(email_from, error_email_to, msg.as_string())
+
+        logger.info(f"Failure notification sent to {error_email_to} for run {run_id}")
+    except Exception as e:
+        logger.error(f"Failed to send failure notification email: {e}")

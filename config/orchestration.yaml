@@ -13,3 +13,6 @@ approval:
 rate_limiting:
   max_retries: 3
   base_delay_seconds: 1.0
+
+failure_notification:
+  enabled: true
