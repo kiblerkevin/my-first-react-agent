@@ -89,12 +89,25 @@ class EvaluateBlogPostTool(BaseTool):
             }
             overall_score = round(sum(criteria_scores.values()) / len(CRITERIA), 2)
 
+            criteria_reasoning = {}
+            for k, v in parsed.get('criteria_reasoning', {}).items():
+                criteria_reasoning[k] = str(v) if not isinstance(v, str) else v
+
+            improvement_suggestions = {}
+            for k, v in parsed.get('improvement_suggestions', {}).items():
+                if isinstance(v, list):
+                    improvement_suggestions[k] = [str(s) for s in v]
+                elif isinstance(v, str):
+                    improvement_suggestions[k] = [v]
+                else:
+                    improvement_suggestions[k] = [str(v)]
+
             output = EvaluateBlogPostOutput(
                 evaluation_id=evaluation_id,
                 overall_score=overall_score,
                 criteria_scores=criteria_scores,
-                criteria_reasoning=parsed.get('criteria_reasoning', {}),
-                improvement_suggestions=parsed.get('improvement_suggestions', {})
+                criteria_reasoning=criteria_reasoning,
+                improvement_suggestions=improvement_suggestions
             )
             logger.info(
                 f"Evaluation {evaluation_id}: overall={overall_score} | "

@@ -1,6 +1,6 @@
 import yaml
 
-from memory.database import init_db, get_session, Category, Tag, PendingApproval, OAuthToken, Article, ArticleSummary, Summary, Evaluation
+from memory.database import init_db, get_session, Category, Tag, PendingApproval, OAuthToken, Article, ArticleSummary, Summary, Evaluation, WorkflowRun
 from utils.logger.logger import setup_logger
 
 
@@ -331,5 +331,41 @@ class Memory:
                 ))
             session.commit()
             logger.info(f"Saved evaluation {evaluation_id[:20]}... ({len(criteria_scores)} criteria) for summary_id={summary_id}")
+        finally:
+            session.close()
+
+    def create_workflow_run(self, run_id: str) -> int:
+        from datetime import datetime
+        session = get_session(self.engine)
+        try:
+            run = WorkflowRun(run_id=run_id, started_at=datetime.utcnow(), status='running')
+            session.add(run)
+            session.commit()
+            logger.info(f"Workflow run started: {run_id}")
+            return run.id
+        finally:
+            session.close()
+
+    def update_workflow_run(self, run_id: str, data: dict):
+        import json as _json
+        from datetime import datetime
+        session = get_session(self.engine)
+        try:
+            run = session.query(WorkflowRun).filter_by(run_id=run_id).first()
+            if not run:
+                return
+            run.completed_at = datetime.utcnow()
+            run.status = data.get('status', run.status)
+            run.skip_reason = data.get('skip_reason')
+            run.error = data.get('error')
+            run.steps_completed = _json.dumps(data.get('steps_completed', []))
+            run.scores_fetched = data.get('scores_fetched')
+            run.articles_fetched = data.get('articles_fetched')
+            run.articles_new = data.get('articles_new')
+            run.summaries_count = data.get('summaries_count')
+            run.overall_score = data.get('overall_score')
+            run.email_sent = data.get('email_sent')
+            session.commit()
+            logger.info(f"Workflow run updated: {run_id} -> {data.get('status')}")
         finally:
             session.close()

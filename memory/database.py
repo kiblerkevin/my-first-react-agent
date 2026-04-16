@@ -143,6 +143,25 @@ class OAuthToken(Base):
     blog_id = Column(String(100), nullable=True)
     blog_url = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class WorkflowRun(Base):
+    __tablename__ = 'workflow_runs'
+
+    id = Column(Integer, primary_key=True)
+    run_id = Column(String(100), nullable=False, unique=True)
+    started_at = Column(DateTime, nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default='running')  # running, success, skipped, failed
+    skip_reason = Column(Text, nullable=True)
+    error = Column(Text, nullable=True)
+    steps_completed = Column(Text, nullable=True)  # JSON list
+    scores_fetched = Column(Integer, nullable=True)
+    articles_fetched = Column(Integer, nullable=True)
+    articles_new = Column(Integer, nullable=True)
+    summaries_count = Column(Integer, nullable=True)
+    overall_score = Column(Float, nullable=True)
+    email_sent = Column(Boolean, nullable=True)
     
     
 def get_engine(db_path='data/articles.db'):

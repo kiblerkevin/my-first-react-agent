@@ -256,8 +256,13 @@ def run_scheduled_workflow():
         try:
             logger.info(f"Daily workflow attempt {attempt + 1}/{max_retries}")
             result = run_daily_workflow(max_articles_per_team=max_articles_per_team)
+
+            if result.get('skipped'):
+                logger.info(f"Daily workflow skipped (run_id={result.get('run_id')}): {result.get('skip_reason')}")
+                return
+
             logger.info(
-                f"Daily workflow completed: '{result['title']}' | "
+                f"Daily workflow completed (run_id={result.get('run_id')}): '{result['title']}' | "
                 f"score={result['overall_score']}/10 | email_sent={result['email_sent']}"
             )
             return

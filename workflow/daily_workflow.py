@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime, timezone
 
 import yaml
 
@@ -34,6 +35,24 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
 
     Returns a dict with workflow results for logging/debugging.
     """
+    run_id = datetime.now(timezone.utc).isoformat()
+    memory = Memory()
+    memory.create_workflow_run(run_id)
+    steps_completed = []
+
+    try:
+        return _execute_workflow(run_id, memory, steps_completed, max_articles_per_team)
+    except Exception as e:
+        logger.error(f"Workflow {run_id} failed: {e}")
+        memory.update_workflow_run(run_id, {
+            'status': 'failed',
+            'error': str(e),
+            'steps_completed': steps_completed
+        })
+        raise
+
+
+def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, max_articles_per_team: int) -> dict:
     with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
         orchestration_config = yaml.safe_load(f)
     max_retries = orchestration_config['revision_loop']['max_retries']
@@ -47,7 +66,6 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
     evaluate_tool = EvaluateBlogPostTool()
     taxonomy_tool = CreateBlogTaxonomyTool()
     approval_tool = SendApprovalEmailTool()
-    memory = Memory()
 
     # Load most recent rejection feedback
     rejection_feedback = None
@@ -62,6 +80,7 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
     logger.info("Step 1: Fetching scores...")
     scores_output = fetch_scores_tool.execute(FetchScoresInput())
     logger.info(f"Scores fetched: {scores_output.score_count}")
+    steps_completed.append('fetch_scores')
 
     # Step 2: Fetch articles
     logger.info("Step 2: Fetching articles...")
@@ -71,6 +90,25 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
         f"{articles_output.new_article_count} new, "
         f"{articles_output.filtered_article_count} previously seen"
     )
+    steps_completed.append('fetch_articles')
+
+    if articles_output.new_article_count == 0:
+        logger.info("No new articles found — skipping today's workflow.")
+        result = {
+            'skipped': True,
+            'skip_reason': 'No new articles found.',
+            'run_id': run_id,
+            'scores_fetched': scores_output.score_count
+        }
+        memory.update_workflow_run(run_id, {
+            'status': 'skipped',
+            'skip_reason': result['skip_reason'],
+            'steps_completed': steps_completed,
+            'scores_fetched': scores_output.score_count,
+            'articles_fetched': articles_output.article_count,
+            'articles_new': 0
+        })
+        return result
 
     # Step 3: Deduplicate articles
     logger.info("Step 3: Deduplicating articles...")
@@ -78,6 +116,7 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
         articles=articles_output.new_articles
     ))
     logger.info(f"Duplicates removed: {dedup_output.duplicate_count}")
+    steps_completed.append('deduplicate_articles')
 
     # Step 4: Summarize top articles per team
     logger.info(f"Step 4: Summarizing articles (top {max_articles_per_team} per team)...")
@@ -103,6 +142,27 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
 
     relevant = [s for s in summaries if s.get('is_relevant')]
     logger.info(f"Summaries: {len(summaries)} total, {len(relevant)} relevant")
+    steps_completed.append('summarize_articles')
+
+    if len(relevant) == 0:
+        logger.info("No relevant summaries — skipping draft.")
+        result = {
+            'skipped': True,
+            'skip_reason': 'No relevant article summaries after summarization.',
+            'run_id': run_id,
+            'scores_fetched': scores_output.score_count,
+            'articles_fetched': articles_output.new_article_count
+        }
+        memory.update_workflow_run(run_id, {
+            'status': 'skipped',
+            'skip_reason': result['skip_reason'],
+            'steps_completed': steps_completed,
+            'scores_fetched': scores_output.score_count,
+            'articles_fetched': articles_output.article_count,
+            'articles_new': articles_output.new_article_count,
+            'summaries_count': len(summaries)
+        })
+        return result
 
     # Steps 5-6: Draft + evaluate with revision loop
     logger.info("Steps 5-6: Drafting and evaluating...")
@@ -156,6 +216,7 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
         logger.info(f"  Max retries reached. Using best draft (score: {best_evaluation.overall_score}/10).")
 
     logger.info(f"Final draft: '{best_draft.title}' | score: {best_evaluation.overall_score}/10")
+    steps_completed.append('draft_and_evaluate')
 
     # Persist blog draft and all evaluations
     summary_id = memory.save_blog_draft({
@@ -180,6 +241,7 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
         players_mentioned=all_players
     ))
     logger.info(f"Taxonomy: {len(taxonomy.categories)} categories, {len(taxonomy.tags)} tags")
+    steps_completed.append('create_taxonomy')
 
     # Step 8: Send approval email
     logger.info("Step 8: Sending approval email...")
@@ -195,8 +257,12 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
     ))
 
     logger.info(f"Approval email sent: {approval_result.email_sent} | token: {approval_result.token[:20]}...")
+    steps_completed.append('send_approval_email')
 
-    return {
+    result = {
+        'skipped': False,
+        'skip_reason': None,
+        'run_id': run_id,
         'title': best_draft.title,
         'teams_covered': best_draft.teams_covered,
         'article_count': best_draft.article_count,
@@ -205,3 +271,16 @@ def run_daily_workflow(max_articles_per_team: int = 2) -> dict:
         'token': approval_result.token,
         'error': approval_result.error
     }
+
+    memory.update_workflow_run(run_id, {
+        'status': 'success',
+        'steps_completed': steps_completed,
+        'scores_fetched': scores_output.score_count,
+        'articles_fetched': articles_output.article_count,
+        'articles_new': articles_output.new_article_count,
+        'summaries_count': len(relevant),
+        'overall_score': best_evaluation.overall_score,
+        'email_sent': approval_result.email_sent
+    })
+
+    return result
