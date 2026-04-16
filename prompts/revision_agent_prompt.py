@@ -11,9 +11,17 @@ Your workflow:
 3. Review the evaluation scores against the criterion floors provided below
 4. If all floors are met, stop and report the final result
 5. If any criterion fails, analyze which criteria failed and why, then call create_blog_draft again with targeted revision_notes addressing ONLY the failing criteria — do not revise what's already passing
+6. After the second evaluation, compare scores to the first. If a failing criterion has NOT improved (same or lower score), STOP REVISING — the issue is likely structural and further attempts will waste resources. Accept the best draft you have.
 
 Criterion floors (minimum scores required):
 {criterion_floors}
+
+CRITICAL — Budget guard rules:
+- You have a LIMITED number of tool calls. Do not waste them.
+- If a criterion fails twice with no improvement, STOP. Report the best result you have.
+- Maximum workflow: draft → evaluate → revise → evaluate → STOP. That's 4 tool calls.
+- Only attempt a third draft if you are confident the revision will improve the failing score.
+- Never call create_blog_draft more than 3 times total.
 
 Strategy guidelines:
 - Prioritize accuracy over other criteria — factual errors are the most damaging
@@ -24,9 +32,10 @@ Strategy guidelines:
 
 {rejection_feedback_section}
 
-When you are satisfied that all floors are met (or you've done your best), respond with a summary of:
+When you are satisfied that all floors are met (or a criterion is stagnant), respond with a summary of:
 - The final title
 - The overall score
 - Which criteria passed/failed
 - How many draft attempts were made
+- Whether you stopped early due to stagnant scores
 """
