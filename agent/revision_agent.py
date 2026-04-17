@@ -68,6 +68,7 @@ class RevisionAgent:
 
         logger.info(f"Revision agent starting (max_tool_calls={self.max_tool_calls})")
         response = agent.send_message(user_message)
+        self._last_tool_calls = agent.tool_call_count
         logger.info(f"Revision agent finished after {agent.tool_call_count} tool calls")
         logger.info(f"Agent response: {response[:200]}...")
 

@@ -1,6 +1,7 @@
 import yaml
+from datetime import datetime, timedelta
 
-from memory.database import init_db, get_session, Category, Tag, PendingApproval, OAuthToken, Article, ArticleSummary, Summary, Evaluation, WorkflowRun
+from memory.database import init_db, get_session, Category, Tag, PendingApproval, OAuthToken, Article, ArticleSummary, Summary, Evaluation, WorkflowRun, ApiCallResult, SummaryStats
 from utils.logger.logger import setup_logger
 
 
@@ -420,5 +421,212 @@ class Memory:
                 'steps_completed': _json.loads(run.steps_completed) if run.steps_completed else [],
                 'data': _json.loads(run.checkpoint_data)
             }
+        finally:
+            session.close()
+
+    def get_workflow_run_db_id(self, run_id: str) -> int | None:
+        session = get_session(self.engine)
+        try:
+            run = session.query(WorkflowRun).filter_by(run_id=run_id).first()
+            return run.id if run else None
+        finally:
+            session.close()
+
+    def save_api_call_result(self, workflow_run_id: int, source_name: str, status: str, article_count: int = None, error: str = None):
+        session = get_session(self.engine)
+        try:
+            session.add(ApiCallResult(
+                workflow_run_id=workflow_run_id,
+                source_name=source_name,
+                status=status,
+                article_count=article_count,
+                error_message=error
+            ))
+            session.commit()
+        finally:
+            session.close()
+
+    def save_summary_stats(self, workflow_run_id: int, stats: list):
+        session = get_session(self.engine)
+        try:
+            for s in stats:
+                session.add(SummaryStats(
+                    workflow_run_id=workflow_run_id,
+                    team=s.get('team', ''),
+                    articles_fetched=s.get('articles_fetched', 0),
+                    articles_summarized=s.get('articles_summarized', 0),
+                    cache_hits=s.get('cache_hits', 0),
+                    cache_misses=s.get('cache_misses', 0)
+                ))
+            session.commit()
+        finally:
+            session.close()
+
+    def update_workflow_publish_result(self, run_id: str, post_id: int, post_url: str, success: bool):
+        session = get_session(self.engine)
+        try:
+            run = session.query(WorkflowRun).filter_by(run_id=run_id).first()
+            if run:
+                run.publish_post_id = post_id
+                run.publish_post_url = post_url
+                run.publish_success = success
+                session.commit()
+        finally:
+            session.close()
+
+    def update_workflow_revision_metrics(self, run_id: str, tool_calls: int, draft_attempts: int, score_progression: list):
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            run = session.query(WorkflowRun).filter_by(run_id=run_id).first()
+            if run:
+                run.revision_tool_calls = tool_calls
+                run.draft_attempts = draft_attempts
+                run.score_progression = _json.dumps(score_progression)
+                session.commit()
+        finally:
+            session.close()
+
+    # --- Dashboard query methods ---
+
+    def get_recent_runs(self, limit: int = 30) -> list:
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            runs = session.query(WorkflowRun).order_by(WorkflowRun.id.desc()).limit(limit).all()
+            return [{
+                'run_id': r.run_id,
+                'started_at': r.started_at.isoformat() if r.started_at else None,
+                'completed_at': r.completed_at.isoformat() if r.completed_at else None,
+                'duration_seconds': (r.completed_at - r.started_at).total_seconds() if r.completed_at and r.started_at else None,
+                'status': r.status,
+                'skip_reason': r.skip_reason,
+                'error': r.error,
+                'steps_completed': _json.loads(r.steps_completed) if r.steps_completed else [],
+                'scores_fetched': r.scores_fetched,
+                'articles_fetched': r.articles_fetched,
+                'articles_new': r.articles_new,
+                'summaries_count': r.summaries_count,
+                'overall_score': r.overall_score,
+                'email_sent': r.email_sent,
+                'revision_tool_calls': r.revision_tool_calls,
+                'draft_attempts': r.draft_attempts,
+                'score_progression': _json.loads(r.score_progression) if r.score_progression else [],
+                'publish_success': r.publish_success
+            } for r in runs]
+        finally:
+            session.close()
+
+    def get_evaluation_trends(self, days: int = 30) -> list:
+        from datetime import timedelta
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            evals = session.query(Evaluation).join(Summary).filter(
+                Summary.created_at >= cutoff
+            ).order_by(Summary.created_at).all()
+
+            by_date = {}
+            for e in evals:
+                date_key = e.summary.created_at.strftime('%Y-%m-%d') if e.summary.created_at else 'unknown'
+                if date_key not in by_date:
+                    by_date[date_key] = {}
+                by_date[date_key][e.criterion] = e.score
+
+            return [{'date': d, **scores} for d, scores in sorted(by_date.items())]
+        finally:
+            session.close()
+
+    def get_api_health(self, days: int = 30) -> list:
+        from datetime import timedelta
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            results = session.query(ApiCallResult).filter(
+                ApiCallResult.created_at >= cutoff
+            ).all()
+
+            by_source = {}
+            for r in results:
+                if r.source_name not in by_source:
+                    by_source[r.source_name] = {'success': 0, 'error': 0, 'total_articles': 0}
+                by_source[r.source_name][r.status] = by_source[r.source_name].get(r.status, 0) + 1
+                if r.article_count:
+                    by_source[r.source_name]['total_articles'] += r.article_count
+
+            return [{'source': s, **counts} for s, counts in by_source.items()]
+        finally:
+            session.close()
+
+    def get_approval_stats(self, days: int = 30) -> dict:
+        from datetime import timedelta
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            approvals = session.query(PendingApproval).filter(
+                PendingApproval.created_at >= cutoff
+            ).all()
+
+            stats = {'approved': 0, 'rejected': 0, 'expired': 0, 'pending': 0}
+            for a in approvals:
+                stats[a.status] = stats.get(a.status, 0) + 1
+            stats['total'] = len(approvals)
+            return stats
+        finally:
+            session.close()
+
+    def get_team_coverage(self, days: int = 30) -> dict:
+        import json as _json
+        from datetime import timedelta
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            summaries = session.query(Summary).filter(
+                Summary.created_at >= cutoff
+            ).all()
+
+            coverage = {}
+            for s in summaries:
+                teams = _json.loads(s.teams_covered) if s.teams_covered else []
+                for team in teams:
+                    coverage[team] = coverage.get(team, 0) + 1
+            return coverage
+        finally:
+            session.close()
+
+    def get_source_distribution(self, days: int = 30) -> dict:
+        from datetime import timedelta
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            results = session.query(ApiCallResult).filter(
+                ApiCallResult.created_at >= cutoff,
+                ApiCallResult.status == 'success'
+            ).all()
+
+            dist = {}
+            for r in results:
+                if r.source_name not in ('espn',):  # exclude scores source
+                    dist[r.source_name] = dist.get(r.source_name, 0) + (r.article_count or 0)
+            return dist
+        finally:
+            session.close()
+
+    def get_summary_cache_stats(self, days: int = 30) -> dict:
+        from datetime import timedelta
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            stats = session.query(SummaryStats).join(WorkflowRun).filter(
+                WorkflowRun.started_at >= cutoff
+            ).all()
+
+            totals = {'cache_hits': 0, 'cache_misses': 0}
+            for s in stats:
+                totals['cache_hits'] += s.cache_hits
+                totals['cache_misses'] += s.cache_misses
+            totals['total'] = totals['cache_hits'] + totals['cache_misses']
+            totals['hit_rate'] = round(totals['cache_hits'] / totals['total'] * 100, 1) if totals['total'] > 0 else 0
+            return totals
         finally:
             session.close()

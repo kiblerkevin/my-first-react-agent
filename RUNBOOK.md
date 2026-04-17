@@ -84,6 +84,7 @@ No manual action needed — just keep the approval server running.
 | Check | How |
 |-------|-----|
 | Langfuse traces | http://localhost:3000 — look for traces after a workflow run |
+| Dashboard | http://localhost:5000/dashboard — workflow performance, API health, evaluation trends |
 | Approval server | http://localhost:5000/status/test — should return 404 page |
 | Database | `data/articles.db` — should exist after first run |
 | Logs | `logs/app_YYYYMMDD.log` — check for errors |

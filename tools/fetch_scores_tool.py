@@ -4,6 +4,7 @@ from tools.base_tool import BaseTool
 from models.inputs.fetch_scores_input import FetchScoresInput
 from models.outputs.fetch_scores_output import FetchScoresOutput
 from utils.article_collectors.api_collectors.espn_collector import ESPNCollector
+from memory.memory import Memory
 from utils.logger.logger import setup_logger
 
 
@@ -83,9 +84,9 @@ class FetchScoresTool(BaseTool):
             output_schema=self.model_fields['output_schema'].default
         )
         self.collector = ESPNCollector()
+        self.memory = Memory()
 
     def execute(self, input: FetchScoresInput) -> FetchScoresOutput:
-        # force_refresh is reserved for future memory layer integration
         logger.info(f"Fetching scores (force_refresh={input.force_refresh})")
 
         output = FetchScoresOutput()
@@ -94,9 +95,17 @@ class FetchScoresTool(BaseTool):
             scores = self.collector.collect_articles()
             output.scores = scores
             output.score_count = len(scores)
+            if input.run_id:
+                db_id = self.memory.get_workflow_run_db_id(input.run_id)
+                if db_id:
+                    self.memory.save_api_call_result(db_id, 'espn', 'success', len(scores))
         except Exception as e:
             error_msg = f"espn: {str(e)}"
             output.errors.append(error_msg)
             logger.error(f"Error collecting scores from ESPN: {e}")
+            if input.run_id:
+                db_id = self.memory.get_workflow_run_db_id(input.run_id)
+                if db_id:
+                    self.memory.save_api_call_result(db_id, 'espn', 'error', error=str(e))
 
         return output

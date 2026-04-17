@@ -99,7 +99,7 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
         scores_data = cp_data['fetch_scores']
     else:
         logger.info("Step 1: Fetching scores...")
-        scores_output = fetch_scores_tool.execute(FetchScoresInput())
+        scores_output = fetch_scores_tool.execute(FetchScoresInput(run_id=run_id))
         scores_data = {'scores': scores_output.scores, 'score_count': scores_output.score_count}
         logger.info(f"Scores fetched: {scores_data['score_count']}")
         steps_completed.append('fetch_scores')
@@ -111,7 +111,7 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
         articles_data = cp_data['fetch_articles']
     else:
         logger.info("Step 2: Fetching articles...")
-        articles_output = fetch_articles_tool.execute(FetchArticlesInput())
+        articles_output = fetch_articles_tool.execute(FetchArticlesInput(run_id=run_id))
         articles_data = {
             'articles': articles_output.articles,
             'new_articles': articles_output.new_articles,
@@ -174,11 +174,13 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
             articles_by_team[article.get('team', 'Unknown')].append(article)
 
         summaries = []
+        team_stats = {}  # track per-team cache hits/misses
         for team, articles in articles_by_team.items():
             top_articles = sorted(
                 articles, key=lambda a: a.get('relevance_score', 0), reverse=True
             )[:max_articles_per_team]
 
+            stats = {'team': team, 'articles_fetched': len(articles), 'articles_summarized': 0, 'cache_hits': 0, 'cache_misses': 0}
             for article in top_articles:
                 logger.info(f"  Summarizing [{team}]: {article.get('title', '')[:70]}")
                 summary = summarize_tool.execute(SummarizeArticleInput(
@@ -188,6 +190,12 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
                     published_at=article.get('publishedAt', '')
                 ))
                 summaries.append(summary.model_dump())
+                stats['articles_summarized'] += 1
+                if summarize_tool.last_cache_hit:
+                    stats['cache_hits'] += 1
+                else:
+                    stats['cache_misses'] += 1
+            team_stats[team] = stats
 
         relevant = [s for s in summaries if s.get('is_relevant')]
         logger.info(f"Summaries: {len(summaries)} total, {len(relevant)} relevant")
@@ -196,6 +204,11 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
             'summaries': summaries,
             'relevant': relevant
         })
+
+        # Persist summary stats
+        db_id = memory.get_workflow_run_db_id(run_id)
+        if db_id:
+            memory.save_summary_stats(db_id, list(team_stats.values()))
 
     if len(relevant) == 0:
         logger.info("No relevant summaries — skipping draft.")
@@ -251,6 +264,15 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
             'best_evaluation': best_evaluation.model_dump(),
             'all_evaluations': all_evaluations
         })
+
+        # Persist revision metrics
+        score_progression = [e.get('overall_score', 0) for e in all_evaluations]
+        memory.update_workflow_revision_metrics(
+            run_id=run_id,
+            tool_calls=getattr(revision_agent, '_last_tool_calls', 0),
+            draft_attempts=len([e for i, e in enumerate(all_evaluations)]),
+            score_progression=score_progression
+        )
 
     # Persist blog draft and all evaluations
     summary_id = memory.save_blog_draft({

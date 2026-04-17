@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from memory.memory import Memory
 from tools.wordpress_publish_tool import WordPressPublishTool
 from models.inputs.wordpress_publish_input import WordPressPublishInput
+from server.dashboard import dashboard_bp
 from utils.logger.logger import setup_logger
 
 
@@ -25,6 +26,7 @@ SCHEDULER_CONFIG_PATH = 'config/scheduler.yaml'
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
 app = Flask(__name__)
+app.register_blueprint(dashboard_bp)
 memory = Memory()
 
 WP_CLIENT_ID = os.getenv('WORDPRESS_CLIENT_ID')
@@ -192,6 +194,15 @@ def approve(token):
             logger.error(f"WordPress publish error: {publish_result.error}")
         else:
             logger.info(f"Published to WordPress: post_id={publish_result.post_id}")
+            # Persist publish result — find the most recent successful workflow run
+            from memory.database import get_session, WorkflowRun as WR
+            session = get_session(memory.engine)
+            last_run = session.query(WR).filter_by(status='success').order_by(WR.id.desc()).first()
+            if last_run:
+                memory.update_workflow_publish_result(
+                    last_run.run_id, publish_result.post_id, publish_result.post_url, True
+                )
+            session.close()
     except Exception as e:
         logger.error(f"Error triggering WordPress publish: {e}")
 

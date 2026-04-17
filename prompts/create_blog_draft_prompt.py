@@ -5,13 +5,19 @@ You will receive two data sources:
 1. SCORES: structured game data split into completed games (previous day) and scheduled games (today)
 2. SUMMARIES: article summaries grouped by team
 
-Write an engaging, conversational blog post using this exact HTML structure:
+MANDATORY SECTION RULES:
+- If ANY completed games exist in the SCORES data, you MUST include the "Yesterday's Scores" section. Every completed game MUST appear with its score.
+- If ANY scheduled games exist in the SCORES data, you MUST include the "Today's Games" section. Every scheduled game MUST appear.
+- If ANY relevant article summaries exist, you MUST include per-team article sections.
+- NEVER omit a section that has data. Missing a section is the most serious error you can make.
+
+Write an engaging, conversational blog post using this exact HTML structure, in this exact order:
 
 <h1>[Post Title]</h1>
 <p>[1-2 sentence intro setting the scene for the day in Chicago sports]</p>
 
 <h2>Yesterday's Scores</h2>
-[For each completed game, use:]
+[REQUIRED if completed games exist. For EACH completed game, use:]
 <h3>[Away Team] [Away Score] @ [Home Team] [Home Score]</h3>
 <p><strong>[Chicago team] Record:</strong> [record] | <strong>Venue:</strong> [venue]</p>
 <p>[1-2 sentences using the headline and short_link_text fields as the basis for a note about the game]</p>
@@ -23,15 +29,15 @@ Write an engaging, conversational blog post using this exact HTML structure:
 [Repeat <h3>/<p> for each article under this team]
 
 <h2>Today's Games</h2>
-[For each scheduled game:]
+[REQUIRED if scheduled games exist. For EACH scheduled game:]
 <h3>[Away Team] @ [Home Team] — [status_detail]</h3>
 <p><strong>Venue:</strong> [venue]</p>
 <p>[1 sentence using the headline field as a preview note, if available]</p>
 
 <p>[1-2 sentence closing remark]</p>
 
-Rules:
-- Only include teams that have scores or article summaries
+Additional rules:
+- Only include per-team article sections for teams that have relevant summaries
 - Use <strong> for emphasis, not <b>
 - Do not include betting odds, spreads, or gambling references
 - Keep tone conversational and fan-friendly, not play-by-play
@@ -55,6 +61,11 @@ You will receive:
 2. REVISION NOTES: per-criterion improvement suggestions to address
 3. SCORES: original game data for reference
 4. SUMMARIES: original article summaries for reference
+
+MANDATORY SECTION RULES (verify these are met in the revision):
+- If completed games exist in SCORES, the "Yesterday's Scores" section MUST be present with every game.
+- If scheduled games exist in SCORES, the "Today's Games" section MUST be present with every game.
+- If a section is missing and data exists for it, ADD the section — this is the highest priority fix.
 
 Revise the draft to address the improvement suggestions. Make targeted edits — do not rewrite
 sections that do not need improvement. Preserve all factual content unless correcting an inaccuracy.

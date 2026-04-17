@@ -167,6 +167,43 @@ class WorkflowRun(Base):
     estimated_cost = Column(Float, nullable=True)
     usage_by_tool = Column(Text, nullable=True)  # JSON string
     checkpoint_data = Column(Text, nullable=True)  # JSON string — step outputs for resume
+    revision_tool_calls = Column(Integer, nullable=True)
+    draft_attempts = Column(Integer, nullable=True)
+    score_progression = Column(Text, nullable=True)  # JSON list of overall scores
+    publish_post_id = Column(Integer, nullable=True)
+    publish_post_url = Column(String(255), nullable=True)
+    publish_success = Column(Boolean, nullable=True)
+
+    api_call_results = relationship("ApiCallResult", back_populates="workflow_run")
+    summary_stats = relationship("SummaryStats", back_populates="workflow_run")
+
+
+class ApiCallResult(Base):
+    __tablename__ = 'api_call_results'
+
+    id = Column(Integer, primary_key=True)
+    workflow_run_id = Column(Integer, ForeignKey('workflow_runs.id'), nullable=False)
+    source_name = Column(String(50), nullable=False)  # newsapi, serpapi, espn
+    status = Column(String(20), nullable=False)  # success, error
+    article_count = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    workflow_run = relationship("WorkflowRun", back_populates="api_call_results")
+
+
+class SummaryStats(Base):
+    __tablename__ = 'summary_stats'
+
+    id = Column(Integer, primary_key=True)
+    workflow_run_id = Column(Integer, ForeignKey('workflow_runs.id'), nullable=False)
+    team = Column(String(100), nullable=False)
+    articles_fetched = Column(Integer, default=0)
+    articles_summarized = Column(Integer, default=0)
+    cache_hits = Column(Integer, default=0)
+    cache_misses = Column(Integer, default=0)
+
+    workflow_run = relationship("WorkflowRun", back_populates="summary_stats")
     
     
 def get_engine(db_path='data/articles.db'):

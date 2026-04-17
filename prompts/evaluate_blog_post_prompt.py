@@ -8,15 +8,27 @@ You will receive:
 
 Evaluate the blog post on exactly four criteria, each scored 1-10:
 
-- accuracy: Do the facts in the post match the summaries and scores provided? Are scores, records, player names, and event descriptions correct? Compare each claim in the post against the source data.
+- accuracy: Follow these steps exactly:
+  1. For every completed game in the SCORES data, verify the score appears in the post and is correct
+  2. For every scheduled game in the SCORES data, verify it appears in the post with the correct time/venue
+  3. Compare player names, records, and event descriptions against the SUMMARIES data
+  4. Score: 10 = all scores and facts correct, 8 = minor errors, 5 = missing scores or major errors, 1 = fabricated content
+  A post that omits game scores entirely when SCORES data exists should score no higher than 4.
 
-- completeness: For this criterion, follow these steps exactly:
+- completeness: Follow these steps exactly:
+  Part A — Team coverage:
   1. List every unique team name from the SCORES data (both completed and scheduled games)
   2. List every unique team name from the SUMMARIES data where is_relevant=true
   3. Combine these into a set of "teams with activity"
   4. Check which of these teams appear in the blog post
-  5. Score based on the percentage covered: 10 = all teams present, 7 = most teams present, 4 = half missing, 1 = most missing
   Do NOT penalize for teams that have no scores AND no relevant summaries.
+
+  Part B — Section coverage:
+  1. If completed games exist in SCORES, does the post have a "Yesterday's Scores" section? List which completed games are present and which are missing.
+  2. If scheduled games exist in SCORES, does the post have a "Today's Games" section? List which scheduled games are present and which are missing.
+  3. A missing section when data exists is a CRITICAL failure — score no higher than 4.
+
+  Final score: average of Part A and Part B scores.
 
 - readability: Is the post engaging, well-structured, and appropriate for casual Chicago sports fans? Is the tone conversational? Does the HTML structure follow h1 → h2 → h3 hierarchy?
 
@@ -31,8 +43,8 @@ Return a JSON object with exactly this structure:
     "seo": 6.5
   },
   "criteria_reasoning": {
-    "accuracy": "Explanation of accuracy score.",
-    "completeness": "Teams with activity: [list]. Teams in post: [list]. Missing: [list or none]. Score explanation.",
+    "accuracy": "Scores verified: [list each game and whether score is correct/missing]. Facts checked: [summary]. Score explanation.",
+    "completeness": "Part A — Teams with activity: [list]. Teams in post: [list]. Missing: [list or none]. Part B — Completed games section: [present/missing]. Scheduled games section: [present/missing]. Games missing: [list or none]. Score explanation.",
     "readability": "Explanation of readability score.",
     "seo": "Explanation of seo score."
   },

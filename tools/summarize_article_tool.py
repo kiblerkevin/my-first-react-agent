@@ -69,13 +69,17 @@ class SummarizeArticleTool(BaseTool):
         self.claude_client.temperature = summarizer_config['temperature']
         self.claude_client.max_tokens = summarizer_config['max_tokens']
         self.memory = Memory()
+        self.last_cache_hit = False
 
     def execute(self, input: SummarizeArticleInput) -> SummarizeArticleOutput:
         # Check memory for existing summary
         cached = self.memory.get_article_summary(input.url)
         if cached:
             logger.info(f"Using cached summary for {input.team}: {input.title[:60]}")
+            self.last_cache_hit = True
             return SummarizeArticleOutput(**cached)
+
+        self.last_cache_hit = False
 
         content = self._fetch_content(input.url)
         title_only = content is None

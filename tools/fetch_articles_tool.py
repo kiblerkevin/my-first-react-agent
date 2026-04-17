@@ -97,10 +97,18 @@ class FetchArticlesTool(BaseTool):
                 source_articles[source_name] = trimmed
                 output.source_counts[source_name] = len(trimmed)
                 logger.info(f"Retained {len(trimmed)} articles from {source_name} after scoring and trimming.")
+                if input.run_id:
+                    db_id = self.memory.get_workflow_run_db_id(input.run_id)
+                    if db_id:
+                        self.memory.save_api_call_result(db_id, source_name, 'success', len(trimmed))
             except Exception as e:
                 error_msg = f"{source_name}: {str(e)}"
                 output.errors.append(error_msg)
                 logger.error(f"Error collecting from {source_name}: {e}")
+                if input.run_id:
+                    db_id = self.memory.get_workflow_run_db_id(input.run_id)
+                    if db_id:
+                        self.memory.save_api_call_result(db_id, source_name, 'error', error=str(e))
 
         all_articles = self._deduplicate_across_sources(source_articles)
         output.articles = all_articles

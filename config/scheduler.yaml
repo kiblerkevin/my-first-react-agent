@@ -2,7 +2,7 @@ daily_workflow:
   cron_hour: 6
   cron_minute: 0
   timezone: "America/Chicago"
-  max_articles_per_team: 2
+  max_articles_per_team: 4
 
 retry:
   max_retries: 5
