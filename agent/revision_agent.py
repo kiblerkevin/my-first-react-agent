@@ -45,18 +45,43 @@ class RevisionAgent:
             rejection_feedback_section=feedback_section
         )
 
-        # Create agent with tools
+        # Rec 1: Use dedicated orchestrator model config
         client = ClaudeClient(system_prompt=system_prompt)
+        with open(LLMS_CONFIG_PATH, 'r') as f:
+            llm_config = yaml.safe_load(f)
+        orchestrator_config = llm_config['claude_orchestrator']
+        client.model = orchestrator_config['model']
+        client.temperature = orchestrator_config['temperature']
+        client.max_tokens = orchestrator_config['max_tokens']
+
+        draft_tool = CreateBlogDraftTool()
+        evaluate_tool = EvaluateBlogPostTool()
+
+        # Rec 2: Ensure scores and summaries are always passed to create_blog_draft
+        required_tool_context = {
+            draft_tool.name: {
+                'summaries': summaries,
+                'scores': scores,
+            }
+        }
+        if rejection_feedback:
+            required_tool_context[draft_tool.name]['rejection_feedback'] = rejection_feedback
+
+        # Rec 4: Configure revision tracking for draft→evaluate cycle
+        revision_tracking = {
+            'draft_tool': draft_tool.name,
+            'evaluate_tool': evaluate_tool.name,
+        }
+
         context = ContextWindow(conversation_history=[])
         agent = BaseAgent(
             context=context,
             claude_client=client,
             max_tool_calls=self.max_tool_calls,
-            force_first_tool='create_blog_draft'
+            force_first_tool='create_blog_draft',
+            required_tool_context=required_tool_context,
+            revision_tracking=revision_tracking,
         )
-
-        draft_tool = CreateBlogDraftTool()
-        evaluate_tool = EvaluateBlogPostTool()
 
         agent.tools = {
             draft_tool.name: draft_tool,
