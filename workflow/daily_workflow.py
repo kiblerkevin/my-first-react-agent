@@ -17,6 +17,7 @@ from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
 from tools.send_approval_email_tool import SendApprovalEmailTool, send_failure_email
 from agent.revision_agent import RevisionAgent
+from utils.consolidate import consolidate_summaries
 from memory.memory import Memory
 from utils.logger.logger import setup_logger
 
@@ -199,6 +200,11 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
 
         relevant = [s for s in summaries if s.get('is_relevant')]
         logger.info(f"Summaries: {len(summaries)} total, {len(relevant)} relevant")
+
+        # Consolidate game_recap summaries for the same team
+        relevant = consolidate_summaries(relevant)
+        logger.info(f"After consolidation: {len(relevant)} summaries")
+
         steps_completed.append('summarize_articles')
         memory.save_checkpoint(run_id, 'summarize_articles', {
             'summaries': summaries,
@@ -246,7 +252,7 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
         logger.info("Steps 5-6: Starting revision agent...")
         revision_agent = RevisionAgent()
         agent_result = revision_agent.run(
-            summaries=summaries,
+            summaries=relevant,
             scores=scores_data['scores'],
             rejection_feedback=rejection_feedback
         )
@@ -329,7 +335,7 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
             categories=taxonomy_data['categories'],
             tags=taxonomy_data['tags'],
             evaluation_scores=best_evaluation.criteria_scores,
-            summaries=summaries,
+            summaries=relevant,
             scores=scores_data['scores']
         ))
         approval_data = {

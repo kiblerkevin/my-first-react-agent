@@ -38,6 +38,8 @@ Write an engaging, conversational blog post using this exact HTML structure, in 
 
 Additional rules:
 - Only include per-team article sections for teams that have relevant summaries
+- If multiple summaries under the same team cover the SAME game or event, consolidate them into a SINGLE <h3> section. Combine the key facts from all summaries into one cohesive paragraph. Do NOT create separate <h3> headers for different aspects of the same game.
+- Each <h3> under a team should represent a DISTINCT story — one game recap, one trade, one injury, etc. Never split one game across multiple headers.
 - Use <strong> for emphasis, not <b>
 - Do not include betting odds, spreads, or gambling references
 - Keep tone conversational and fan-friendly, not play-by-play
