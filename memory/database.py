@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, Boolean, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Text, Float, DateTime, Boolean, ForeignKey, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -173,6 +173,11 @@ class WorkflowRun(Base):
     publish_post_id = Column(Integer, nullable=True)
     publish_post_url = Column(String(255), nullable=True)
     publish_success = Column(Boolean, nullable=True)
+    draft_iterations = Column(Text, nullable=True)  # JSON list of {title, content, excerpt, teams_covered}
+
+    __table_args__ = (
+        Index('ix_workflow_runs_started_at', 'started_at'),
+    )
 
     api_call_results = relationship("ApiCallResult", back_populates="workflow_run")
     summary_stats = relationship("SummaryStats", back_populates="workflow_run")

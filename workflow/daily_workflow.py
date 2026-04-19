@@ -256,6 +256,7 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
         best_draft = CreateBlogDraftOutput(**agent_result['best_draft'])
         best_evaluation = EvaluateBlogPostOutput(**agent_result['best_evaluation'])
         all_evaluations = agent_result['all_evaluations']
+        all_drafts = agent_result.get('all_drafts', [])
 
         logger.info(f"Final draft: '{best_draft.title}' | score: {best_evaluation.overall_score}/10")
         steps_completed.append('draft_and_evaluate')
@@ -265,13 +266,20 @@ def _execute_workflow(run_id: str, memory: Memory, steps_completed: list, cp_dat
             'all_evaluations': all_evaluations
         })
 
-        # Persist revision metrics
+        # Persist revision metrics and draft iterations
         score_progression = [e.get('overall_score', 0) for e in all_evaluations]
+        draft_iterations = [{
+            'title': d.get('title', ''),
+            'content': d.get('content', ''),
+            'excerpt': d.get('excerpt', ''),
+            'teams_covered': d.get('teams_covered', [])
+        } for d in all_drafts]
         memory.update_workflow_revision_metrics(
             run_id=run_id,
             tool_calls=getattr(revision_agent, '_last_tool_calls', 0),
-            draft_attempts=len([e for i, e in enumerate(all_evaluations)]),
-            score_progression=score_progression
+            draft_attempts=len(all_drafts),
+            score_progression=score_progression,
+            draft_iterations=draft_iterations
         )
 
     # Persist blog draft and all evaluations

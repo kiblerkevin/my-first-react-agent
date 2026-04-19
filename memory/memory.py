@@ -474,7 +474,7 @@ class Memory:
         finally:
             session.close()
 
-    def update_workflow_revision_metrics(self, run_id: str, tool_calls: int, draft_attempts: int, score_progression: list):
+    def update_workflow_revision_metrics(self, run_id: str, tool_calls: int, draft_attempts: int, score_progression: list, draft_iterations: list = None):
         import json as _json
         session = get_session(self.engine)
         try:
@@ -483,6 +483,8 @@ class Memory:
                 run.revision_tool_calls = tool_calls
                 run.draft_attempts = draft_attempts
                 run.score_progression = _json.dumps(score_progression)
+                if draft_iterations:
+                    run.draft_iterations = _json.dumps(draft_iterations)
                 session.commit()
         finally:
             session.close()
@@ -628,5 +630,131 @@ class Memory:
             totals['total'] = totals['cache_hits'] + totals['cache_misses']
             totals['hit_rate'] = round(totals['cache_hits'] / totals['total'] * 100, 1) if totals['total'] > 0 else 0
             return totals
+        finally:
+            session.close()
+
+    def get_run_iterations(self, run_id: str) -> dict | None:
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            run = session.query(
+                WorkflowRun.run_id,
+                WorkflowRun.started_at,
+                WorkflowRun.status,
+                WorkflowRun.overall_score,
+                WorkflowRun.draft_attempts,
+                WorkflowRun.score_progression,
+                WorkflowRun.draft_iterations
+            ).filter_by(run_id=run_id).first()
+
+            if not run:
+                return None
+
+            drafts = _json.loads(run.draft_iterations) if run.draft_iterations else []
+
+            # Get evaluations from the Evaluation table linked via Summary
+            summary = session.query(Summary).filter(
+                Summary.created_at >= run.started_at
+            ).order_by(Summary.created_at.desc()).first() if run.started_at else None
+
+            evaluations_by_id = {}
+            if summary:
+                evals = session.query(Evaluation).filter_by(summary_id=summary.id).all()
+                for e in evals:
+                    if e.evaluation_id not in evaluations_by_id:
+                        evaluations_by_id[e.evaluation_id] = {
+                            'evaluation_id': e.evaluation_id,
+                            'criteria_scores': {},
+                            'criteria_reasoning': {}
+                        }
+                    evaluations_by_id[e.evaluation_id]['criteria_scores'][e.criterion] = e.score
+                    evaluations_by_id[e.evaluation_id]['criteria_reasoning'][e.criterion] = e.reasoning or ''
+
+            eval_list = list(evaluations_by_id.values())
+            for ev in eval_list:
+                scores = ev['criteria_scores']
+                ev['overall_score'] = round(sum(scores.values()) / len(scores), 2) if scores else 0
+
+            # Pair drafts with evaluations by index
+            iterations = []
+            for i in range(max(len(drafts), len(eval_list))):
+                iterations.append({
+                    'attempt': i + 1,
+                    'draft': drafts[i] if i < len(drafts) else None,
+                    'evaluation': eval_list[i] if i < len(eval_list) else None
+                })
+
+            return {
+                'run_id': run.run_id,
+                'started_at': run.started_at.isoformat() if run.started_at else None,
+                'status': run.status,
+                'overall_score': run.overall_score,
+                'draft_attempts': run.draft_attempts,
+                'score_progression': _json.loads(run.score_progression) if run.score_progression else [],
+                'iterations': iterations
+            }
+        finally:
+            session.close()
+
+    def get_runs_in_window(self, offset: int = 0, limit: int = 7) -> list:
+        import json as _json
+        session = get_session(self.engine)
+        try:
+            runs = session.query(
+                WorkflowRun.run_id,
+                WorkflowRun.started_at,
+                WorkflowRun.status,
+                WorkflowRun.overall_score,
+                WorkflowRun.draft_attempts
+            ).filter(
+                WorkflowRun.status.in_(['success', 'failed'])
+            ).order_by(
+                WorkflowRun.started_at.desc()
+            ).offset(offset).limit(limit).all()
+
+            return [{
+                'run_id': r.run_id,
+                'started_at': r.started_at.isoformat() if r.started_at else None,
+                'status': r.status,
+                'overall_score': r.overall_score,
+                'draft_attempts': r.draft_attempts
+            } for r in runs]
+        finally:
+            session.close()
+
+    def get_runs_in_range(self, start_date: str, end_date: str) -> list:
+        session = get_session(self.engine)
+        try:
+            start = datetime.fromisoformat(start_date)
+            end = datetime.fromisoformat(end_date)
+
+            runs = session.query(
+                WorkflowRun.run_id,
+                WorkflowRun.started_at,
+                WorkflowRun.status,
+                WorkflowRun.overall_score,
+                WorkflowRun.draft_attempts
+            ).filter(
+                WorkflowRun.started_at >= start,
+                WorkflowRun.started_at <= end,
+                WorkflowRun.status.in_(['success', 'failed'])
+            ).order_by(WorkflowRun.started_at.desc()).all()
+
+            return [{
+                'run_id': r.run_id,
+                'started_at': r.started_at.isoformat() if r.started_at else None,
+                'status': r.status,
+                'overall_score': r.overall_score,
+                'draft_attempts': r.draft_attempts
+            } for r in runs]
+        finally:
+            session.close()
+
+    def get_total_run_count(self) -> int:
+        session = get_session(self.engine)
+        try:
+            return session.query(WorkflowRun).filter(
+                WorkflowRun.status.in_(['success', 'failed'])
+            ).count()
         finally:
             session.close()

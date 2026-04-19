@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draft Iterations — Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: #1a1a2e; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 22px; }
+        .header a { color: #aaa; text-decoration: none; font-size: 14px; }
+        .header a:hover { color: white; }
+        .controls { padding: 20px 30px; background: white; border-bottom: 1px solid #ddd; display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+        .controls label { font-size: 13px; color: #666; }
+        .controls input[type="date"] { padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+        .controls button { padding: 6px 14px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-size: 13px; }
+        .controls button:hover { background: #f0f0f0; }
+        .controls button:disabled { opacity: 0.4; cursor: default; }
+        .controls .page-info { font-size: 13px; color: #666; }
+        .content { padding: 20px 30px; }
+        .run-card { background: white; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
+        .run-header { padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .run-header:hover { background: #fafafa; }
+        .run-header h3 { font-size: 15px; }
+        .run-meta { font-size: 13px; color: #666; display: flex; gap: 15px; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge.success { background: #d4edda; color: #155724; }
+        .badge.failed { background: #f8d7da; color: #721c24; }
+        .run-body { display: none; padding: 0 20px 20px; }
+        .run-body.open { display: block; }
+        .iteration { border: 1px solid #e0e0e0; border-radius: 6px; margin-top: 15px; overflow: hidden; }
+        .iter-header { padding: 12px 15px; background: #f8f9fa; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
+        .iter-header:hover { background: #eef; }
+        .iter-header h4 { font-size: 14px; }
+        .score-badges { display: flex; gap: 8px; }
+        .score-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .score-badge.pass { background: #d4edda; color: #155724; }
+        .score-badge.fail { background: #f8d7da; color: #721c24; }
+        .iter-body { display: none; padding: 15px; }
+        .iter-body.open { display: block; }
+        .eval-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 13px; }
+        .eval-table th { text-align: left; padding: 8px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
+        .eval-table td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: top; }
+        .eval-table .reasoning { color: #555; font-size: 12px; max-width: 500px; }
+        .draft-container { border: 1px solid #ccc; border-radius: 4px; margin-top: 10px; }
+        .draft-toggle { padding: 10px 15px; background: #f8f9fa; cursor: pointer; font-size: 13px; font-weight: 600; border-bottom: 1px solid #ccc; }
+        .draft-toggle:hover { background: #eef; }
+        .draft-frame { display: none; width: 100%; height: 500px; border: none; }
+        .draft-frame.open { display: block; }
+        .sparkline { display: flex; align-items: end; gap: 3px; height: 30px; }
+        .sparkline .bar { width: 20px; background: #007bff; border-radius: 2px 2px 0 0; min-height: 3px; }
+        .no-data { text-align: center; padding: 40px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📝 Draft Iterations</h1>
+        <a href="/dashboard">← Back to Dashboard</a>
+    </div>
+
+    <div class="controls">
+        <div>
+            <label>From:</label>
+            <input type="date" id="date-start">
+        </div>
+        <div>
+            <label>To:</label>
+            <input type="date" id="date-end">
+        </div>
+        <button onclick="loadByRange()">Filter by Date</button>
+        <div style="border-left: 1px solid #ccc; height: 30px;"></div>
+        <button id="btn-prev" onclick="pagePrev()">← Newer</button>
+        <span class="page-info" id="page-info">—</span>
+        <button id="btn-next" onclick="pageNext()">Older →</button>
+    </div>
+
+    <div class="content" id="runs-container">
+        <div class="no-data">Loading...</div>
+    </div>
+
+    <script>
+        const LIMIT = 7;
+        const FLOORS = {accuracy: 8.0, completeness: 7.0, readability: 7.0, seo: 6.0};
+        let currentOffset = 0;
+        let totalRuns = 0;
+        let currentRuns = [];
+
+        function formatDate(iso) {
+            if (!iso) return '—';
+            return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function scoreBadge(criterion, score) {
+            const floor = FLOORS[criterion] || 0;
+            const cls = score >= floor ? 'pass' : 'fail';
+            return `<span class="score-badge ${cls}">${criterion}: ${score}</span>`;
+        }
+
+        function toggleRun(runId) {
+            const body = document.getElementById(`run-body-${runId}`);
+            if (body.classList.contains('open')) {
+                body.classList.remove('open');
+                return;
+            }
+            body.classList.add('open');
+            if (!body.dataset.loaded) {
+                loadIterations(runId, body);
+            }
+        }
+
+        function toggleIteration(id) {
+            document.getElementById(`iter-body-${id}`).classList.toggle('open');
+        }
+
+        function toggleDraft(id) {
+            const frame = document.getElementById(`draft-frame-${id}`);
+            frame.classList.toggle('open');
+        }
+
+        async function loadIterations(runId, container) {
+            container.innerHTML = '<p style="padding:10px;color:#999;">Loading iterations...</p>';
+            try {
+                const res = await fetch(`/dashboard/api/iterations/${encodeURIComponent(runId)}`);
+                const data = await res.json();
+
+                if (!data.iterations || data.iterations.length === 0) {
+                    container.innerHTML = '<p style="padding:10px;color:#999;">No iteration data available for this run.</p>';
+                    container.dataset.loaded = 'true';
+                    return;
+                }
+
+                let html = '';
+                if (data.score_progression && data.score_progression.length > 1) {
+                    const max = Math.max(...data.score_progression, 10);
+                    html += '<div style="padding:10px 0;"><strong style="font-size:13px;">Score Progression:</strong> <div class="sparkline" style="display:inline-flex;margin-left:10px;">';
+                    data.score_progression.forEach((s, i) => {
+                        const h = Math.max(3, (s / max) * 30);
+                        html += `<div class="bar" style="height:${h}px;" title="Attempt ${i+1}: ${s}"></div>`;
+                    });
+                    html += '</div></div>';
+                }
+
+                data.iterations.forEach((iter, idx) => {
+                    const iterId = `${runId}-${idx}`;
+                    const eval_ = iter.evaluation;
+                    const draft = iter.draft;
+                    const overallScore = eval_ ? eval_.overall_score : '—';
+
+                    let badges = '';
+                    if (eval_ && eval_.criteria_scores) {
+                        Object.entries(eval_.criteria_scores).forEach(([k, v]) => {
+                            badges += scoreBadge(k, v);
+                        });
+                    }
+
+                    html += `<div class="iteration">`;
+                    html += `<div class="iter-header" onclick="toggleIteration('${iterId}')">`;
+                    html += `<h4>Attempt ${iter.attempt} — Overall: ${overallScore}/10</h4>`;
+                    html += `<div class="score-badges">${badges}</div>`;
+                    html += `</div>`;
+                    html += `<div class="iter-body" id="iter-body-${iterId}">`;
+
+                    // Evaluation table
+                    if (eval_ && eval_.criteria_scores) {
+                        html += `<table class="eval-table">`;
+                        html += `<thead><tr><th>Criterion</th><th>Score</th><th>Floor</th><th>Status</th><th>Reasoning</th></tr></thead><tbody>`;
+                        Object.entries(eval_.criteria_scores).forEach(([criterion, score]) => {
+                            const floor = FLOORS[criterion] || '—';
+                            const status = score >= floor ? '✅' : '❌';
+                            const reasoning = (eval_.criteria_reasoning && eval_.criteria_reasoning[criterion]) || '';
+                            html += `<tr>
+                                <td><strong>${criterion}</strong></td>
+                                <td>${score}/10</td>
+                                <td>${floor}</td>
+                                <td>${status}</td>
+                                <td class="reasoning">${reasoning}</td>
+                            </tr>`;
+                        });
+                        html += `</tbody></table>`;
+                    } else {
+                        html += `<p style="color:#999;">No evaluation data for this attempt.</p>`;
+                    }
+
+                    // Draft preview (lazy iframe)
+                    if (draft && draft.content) {
+                        html += `<div class="draft-container">`;
+                        html += `<div class="draft-toggle" onclick="toggleDraft('${iterId}')">📄 Toggle Draft Preview — ${draft.title || 'Untitled'}</div>`;
+                        html += `<iframe class="draft-frame" id="draft-frame-${iterId}" sandbox="allow-same-origin"></iframe>`;
+                        html += `</div>`;
+                        // Store content in a data attribute for lazy loading
+                        html += `<script>
+                            document.getElementById('draft-frame-${iterId}').addEventListener('transitionend', function() {});
+                            (function() {
+                                const frame = document.getElementById('draft-frame-${iterId}');
+                                const observer = new MutationObserver(function(mutations) {
+                                    if (frame.classList.contains('open') && !frame.dataset.loaded) {
+                                        frame.dataset.loaded = 'true';
+                                        const doc = frame.contentDocument || frame.contentWindow.document;
+                                        doc.open();
+                                        doc.write(${JSON.stringify(draft.content)});
+                                        doc.close();
+                                    }
+                                });
+                                observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
+                            })();
+                        <\/script>`;
+                    } else {
+                        html += `<p style="color:#999;margin-top:10px;">No draft content available for this attempt.</p>`;
+                    }
+
+                    html += `</div></div>`;
+                });
+
+                container.innerHTML = html;
+                container.dataset.loaded = 'true';
+            } catch (e) {
+                container.innerHTML = `<p style="padding:10px;color:#dc3545;">Error loading iterations: ${e.message}</p>`;
+            }
+        }
+
+        function renderRuns(runs) {
+            const container = document.getElementById('runs-container');
+            if (!runs || runs.length === 0) {
+                container.innerHTML = '<div class="no-data">No workflow runs found for this window.</div>';
+                return;
+            }
+
+            let html = '';
+            runs.forEach(r => {
+                const safeId = CSS.escape(r.run_id);
+                html += `<div class="run-card">`;
+                html += `<div class="run-header" onclick="toggleRun('${r.run_id}')">`;
+                html += `<h3>${formatDate(r.started_at)}</h3>`;
+                html += `<div class="run-meta">`;
+                html += `<span class="badge ${r.status}">${r.status}</span>`;
+                html += `<span>Score: ${r.overall_score || '—'}/10</span>`;
+                html += `<span>Drafts: ${r.draft_attempts || '—'}</span>`;
+                html += `</div></div>`;
+                html += `<div class="run-body" id="run-body-${r.run_id}"></div>`;
+                html += `</div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        async function loadByWindow() {
+            const res = await fetch(`/dashboard/api/runs/window?offset=${currentOffset}&limit=${LIMIT}`);
+            const data = await res.json();
+            totalRuns = data.total;
+            currentRuns = data.runs;
+            renderRuns(currentRuns);
+            updatePageInfo();
+        }
+
+        async function loadByRange() {
+            const start = document.getElementById('date-start').value;
+            const end = document.getElementById('date-end').value;
+            if (!start || !end) return;
+            const res = await fetch(`/dashboard/api/runs/range?start=${start}T00:00:00&end=${end}T23:59:59`);
+            const data = await res.json();
+            currentRuns = data.runs;
+            renderRuns(currentRuns);
+            document.getElementById('page-info').textContent = `${currentRuns.length} runs in range`;
+            document.getElementById('btn-prev').disabled = true;
+            document.getElementById('btn-next').disabled = true;
+        }
+
+        function pagePrev() {
+            if (currentOffset > 0) {
+                currentOffset = Math.max(0, currentOffset - LIMIT);
+                loadByWindow();
+            }
+        }
+
+        function pageNext() {
+            if (currentOffset + LIMIT < totalRuns) {
+                currentOffset += LIMIT;
+                loadByWindow();
+            }
+        }
+
+        function updatePageInfo() {
+            const start = currentOffset + 1;
+            const end = Math.min(currentOffset + LIMIT, totalRuns);
+            document.getElementById('page-info').textContent = `${start}–${end} of ${totalRuns}`;
+            document.getElementById('btn-prev').disabled = currentOffset === 0;
+            document.getElementById('btn-next').disabled = currentOffset + LIMIT >= totalRuns;
+        }
+
+        // Set default date range to last 7 days
+        const today = new Date();
+        const weekAgo = new Date(today);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        document.getElementById('date-end').value = today.toISOString().split('T')[0];
+        document.getElementById('date-start').value = weekAgo.toISOString().split('T')[0];
+
+        // Initial load
+        loadByWindow();
+    </script>
+</body>
+</html>

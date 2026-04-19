@@ -113,15 +113,15 @@ class RevisionAgent:
         return '\n'.join(sections)
 
     def _extract_results(self, context: ContextWindow, agent_response: str) -> dict:
-        """Extract the best draft and all evaluations from the agent's tool call history."""
+        """Extract all drafts and evaluations from the agent's tool call history."""
         best_draft = None
         best_evaluation = None
+        all_drafts = []
         all_evaluations = []
 
         for msg in context.conversation_history:
             msg_dict = msg.model_dump()
 
-            # Look for tool results
             if msg_dict.get('role') == 'user' and isinstance(msg_dict.get('content'), list):
                 for item in msg_dict['content']:
                     if item.get('type') != 'tool_result' or item.get('is_error'):
@@ -132,18 +132,16 @@ class RevisionAgent:
                     except (json.JSONDecodeError, TypeError):
                         continue
 
-                    # Detect evaluation results (have criteria_scores)
                     if 'criteria_scores' in result:
                         all_evaluations.append(result)
                         score = result.get('overall_score', 0)
                         if best_evaluation is None or score > best_evaluation.get('overall_score', 0):
                             best_evaluation = result
 
-                    # Detect draft results (have title and content)
                     elif 'title' in result and 'content' in result and len(result.get('content', '')) > 100:
-                        best_draft = result
+                        all_drafts.append(result)
+                        best_draft = result  # last draft is the most revised
 
-        # Fallback if extraction fails
         if not best_draft:
             logger.warning("Could not extract draft from agent history — returning empty draft.")
             best_draft = {'title': '', 'content': '', 'excerpt': '', 'teams_covered': [], 'article_count': 0}
@@ -151,9 +149,17 @@ class RevisionAgent:
             logger.warning("Could not extract evaluation from agent history — returning empty evaluation.")
             best_evaluation = {'evaluation_id': '', 'overall_score': 0.0, 'criteria_scores': {}, 'criteria_reasoning': {}, 'improvement_suggestions': {}}
 
+        # Pick the draft with the best evaluation score
+        if all_evaluations and all_drafts:
+            best_idx = max(range(len(all_evaluations)), key=lambda i: all_evaluations[i].get('overall_score', 0))
+            if best_idx < len(all_drafts):
+                best_draft = all_drafts[best_idx]
+            best_evaluation = all_evaluations[best_idx]
+
         return {
             'best_draft': best_draft,
             'best_evaluation': best_evaluation,
+            'all_drafts': all_drafts,
             'all_evaluations': all_evaluations,
             'agent_response': agent_response
         }
