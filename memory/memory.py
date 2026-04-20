@@ -35,7 +35,7 @@ class Memory:
         db_path = config['database']['path']
         self.db_path = db_path
         self.retention_days = config['database'].get('retention_days', 30)
-        self.log_retention_days = config['database'].get('log_retention_days', 30)
+        self.log_retention_days = config.get('logging', {}).get('retention_days', 14)
         self.backup_path = config.get('backup', {}).get('path', 'data/backups')
         self.backup_retention_days = config.get('backup', {}).get('retention_days', 30)
         self.engine = init_db(db_path)

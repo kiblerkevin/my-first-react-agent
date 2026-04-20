@@ -28,7 +28,7 @@ from tools.send_approval_email_tool import (
 from tools.summarize_article_tool import SummarizeArticleTool
 from utils.consolidate import consolidate_summaries
 from utils.drift_detector import DriftDetector
-from utils.logger.logger import setup_logger
+from utils.logger.logger import clear_log_context, set_log_context, setup_logger
 
 logger = setup_logger(__name__)
 
@@ -72,6 +72,7 @@ def run_daily_workflow(
     cp_data: dict[str, Any] = checkpoint['data'] if checkpoint else {}
     steps_completed = list(completed)
 
+    set_log_context(run_id=run_id)
     try:
         return _execute_workflow(
             run_id, memory, steps_completed, cp_data, max_articles_per_team
@@ -92,6 +93,8 @@ def run_daily_workflow(
             steps_completed=steps_completed,
         )
         raise
+    finally:
+        clear_log_context()
 
 
 def _step_done(step_name: str, steps_completed: list[str]) -> bool:

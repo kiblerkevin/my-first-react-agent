@@ -193,6 +193,11 @@ mutmut results
 - Embeddings/cosine similarity deferred until memory layer matures
 - Dashboard authentication deferred — keep routes unauthenticated on localhost, add auth to dashboard blueprint when needed
 
+## Future State
+
+- **FastAPI Migration** — Migrate Flask approval server and dashboard to FastAPI for async support, native Pydantic validation, auto-generated OpenAPI docs, and type-safe routing. Trigger: when adding WebSocket dashboard updates, public API, or concurrent webhook handling.
+- **External Log Aggregation** — Add configurable log transport handler (CloudWatch, Datadog, ELK) for centralized search, alerting, and visualization. JSON log format is already compatible — just needs a shipper (Filebeat, CloudWatch agent, Fluentd) or a direct handler. Trigger: when moving beyond single-machine deployment.
+
 ## Notes
 
 - See RUNBOOK.md for startup checklist and troubleshooting

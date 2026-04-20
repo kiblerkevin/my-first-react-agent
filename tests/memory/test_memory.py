@@ -421,7 +421,9 @@ class TestMemoryInit:
     @patch('memory.memory.init_db')
     def test_init_reads_config(self, mock_init_db, mock_open, mock_yaml):
         mock_yaml.return_value = {
-            'database': {'path': 'test.db', 'retention_days': 14, 'log_retention_days': 7}
+            'database': {'path': 'test.db', 'retention_days': 14},
+            'logging': {'retention_days': 7},
+            'backup': {'path': 'my/backups', 'retention_days': 60},
         }
         mock_init_db.return_value = MagicMock()
 
@@ -429,6 +431,8 @@ class TestMemoryInit:
         m = Memory()
         assert m.retention_days == 14
         assert m.log_retention_days == 7
+        assert m.backup_path == 'my/backups'
+        assert m.backup_retention_days == 60
 
     def test_purge_old_logs_no_log_dir(self, memory):
         """Line 105: returns early when log dir doesn't exist."""
