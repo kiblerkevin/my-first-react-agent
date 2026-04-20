@@ -237,6 +237,21 @@ class ApiCallResult(Base):
     workflow_run = relationship('WorkflowRun', back_populates='api_call_results')
 
 
+class DriftAlert(Base):
+    """Active or resolved drift alert for suppression and recovery tracking."""
+
+    __tablename__ = 'drift_alerts'
+
+    id = Column(Integer, primary_key=True)
+    metric_name = Column(String(100), nullable=False)
+    status = Column(String(20), nullable=False, default='active')  # active, resolved
+    triggered_at = Column(DateTime, nullable=False)
+    resolved_at = Column(DateTime, nullable=True)
+    metric_value = Column(Float, nullable=True)
+    threshold = Column(Float, nullable=True)
+    run_id = Column(String(100), nullable=True)
+
+
 class SummaryStats(Base):
     """Per-team summarization statistics for a workflow run."""
 

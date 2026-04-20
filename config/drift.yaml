@@ -1,0 +1,73 @@
+# Drift detection thresholds and configuration
+# Each metric has a threshold, window (number of runs to evaluate), and suggested actions
+
+metrics:
+  average_overall_score:
+    threshold: 7.0
+    comparison: below  # alert when value drops below threshold
+    window: 5
+    description: "Average overall evaluation score"
+    suggested_actions:
+      - "Review evaluation and drafting prompts for degradation"
+      - "Check if source article quality has declined"
+      - "Inspect recent Langfuse traces for anomalies"
+
+  consecutive_failures:
+    threshold: 3
+    comparison: at_or_above  # alert when value reaches threshold
+    window: 10
+    description: "Consecutive workflow failures"
+    suggested_actions:
+      - "Check API connectivity (ESPN, NewsAPI, SerpAPI)"
+      - "Verify Anthropic API key and rate limits"
+      - "Review recent error logs for patterns"
+
+  average_revision_tool_calls:
+    threshold: 5
+    comparison: above  # alert when value exceeds threshold
+    window: 5
+    description: "Average revision tool calls per run"
+    suggested_actions:
+      - "Review criterion floors — they may be too strict"
+      - "Check if evaluation prompt is scoring too harshly"
+      - "Inspect draft quality in recent Langfuse traces"
+
+  consecutive_low_completeness:
+    threshold: 6.0
+    comparison: below
+    window: 3
+    description: "Completeness score in consecutive runs"
+    suggested_actions:
+      - "Check if ESPN API is returning fewer games"
+      - "Verify team list in sources.yaml is current"
+      - "Review completeness evaluation criteria"
+
+  consecutive_low_accuracy:
+    threshold: 7.0
+    comparison: below
+    window: 2
+    description: "Accuracy score in consecutive runs"
+    suggested_actions:
+      - "Verify game scores against ESPN manually"
+      - "Check if drafter is hallucinating content"
+      - "Review accuracy evaluation prompt"
+
+  approval_rejection_rate:
+    threshold: 50
+    comparison: above  # alert when rejection % exceeds threshold
+    window: 7
+    description: "Approval rejection rate (%)"
+    suggested_actions:
+      - "Review recent rejection feedback for patterns"
+      - "Consider adjusting criterion floors"
+      - "Check if blog format expectations have changed"
+
+  consecutive_no_news_skips:
+    threshold: 3
+    comparison: at_or_above
+    window: 10
+    description: "Consecutive no-news workflow skips"
+    suggested_actions:
+      - "Check NewsAPI and SerpAPI connectivity"
+      - "Verify API keys are not expired"
+      - "Check if team queries are returning results manually"

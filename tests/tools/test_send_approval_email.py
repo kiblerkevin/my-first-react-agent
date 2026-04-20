@@ -196,3 +196,119 @@ class TestSendFailureEmailEdgeCases:
 
         # Should not raise
         send_failure_email(run_id='run-fail', error='X', steps_completed=[])
+
+
+class TestDriftEmails:
+    """Tests for drift alert and recovery email functions."""
+
+    @patch('tools.send_approval_email_tool.smtplib.SMTP')
+    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch('builtins.open')
+    @patch.dict('os.environ', {
+        'EMAIL_SMTP_SERVER': 'smtp.test.com',
+        'EMAIL_SMTP_PORT': '587',
+        'EMAIL_FROM': 'test@test.com',
+        'EMAIL_PASSWORD': 'pass',
+        'EMAIL_TO': 'admin@test.com',
+    })
+    def test_send_drift_alert_email(self, mock_open, mock_yaml, mock_smtp):
+        from tools.send_approval_email_tool import send_drift_alert_email
+
+        alerts = [{
+            'metric_name': 'average_overall_score',
+            'value': 5.5,
+            'threshold': 7.0,
+            'description': 'Average overall score',
+            'suggested_actions': ['Fix prompts', 'Check sources'],
+        }]
+        send_drift_alert_email(alerts)
+
+        import email as email_mod
+        smtp_instance = mock_smtp.return_value.__enter__.return_value
+        smtp_instance.sendmail.assert_called_once()
+        raw = smtp_instance.sendmail.call_args[0][2]
+        msg = email_mod.message_from_string(raw)
+        html = None
+        for part in msg.walk():
+            if part.get_content_type() == 'text/html':
+                html = part.get_payload(decode=True).decode()
+                break
+        assert 'average_overall_score' in html
+        assert 'Fix prompts' in html
+
+    @patch('tools.send_approval_email_tool.smtplib.SMTP')
+    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch('builtins.open')
+    @patch.dict('os.environ', {
+        'EMAIL_SMTP_SERVER': 'smtp.test.com',
+        'EMAIL_SMTP_PORT': '587',
+        'EMAIL_FROM': 'test@test.com',
+        'EMAIL_PASSWORD': 'pass',
+        'EMAIL_TO': 'admin@test.com',
+    })
+    def test_send_drift_recovery_email(self, mock_open, mock_yaml, mock_smtp):
+        from tools.send_approval_email_tool import send_drift_recovery_email
+
+        recoveries = [{
+            'metric_name': 'consecutive_failures',
+            'value': 0,
+            'description': 'Consecutive failures',
+        }]
+        send_drift_recovery_email(recoveries)
+
+        smtp_instance = mock_smtp.return_value.__enter__.return_value
+        smtp_instance.sendmail.assert_called_once()
+
+    @patch('tools.send_approval_email_tool.smtplib.SMTP')
+    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': False}})
+    @patch('builtins.open')
+    @patch.dict('os.environ', {'EMAIL_TO': 'x@x.com'})
+    def test_drift_alert_skipped_when_disabled(self, mock_open, mock_yaml, mock_smtp):
+        from tools.send_approval_email_tool import send_drift_alert_email
+
+        send_drift_alert_email([{'metric_name': 'x', 'value': 1, 'threshold': 5, 'description': 'x', 'suggested_actions': []}])
+        mock_smtp.assert_not_called()
+
+    @patch('tools.send_approval_email_tool.smtplib.SMTP')
+    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': False}})
+    @patch('builtins.open')
+    @patch.dict('os.environ', {'EMAIL_TO': 'x@x.com'})
+    def test_drift_recovery_skipped_when_disabled(self, mock_open, mock_yaml, mock_smtp):
+        from tools.send_approval_email_tool import send_drift_recovery_email
+
+        send_drift_recovery_email([{'metric_name': 'x', 'value': 1, 'description': 'x'}])
+        mock_smtp.assert_not_called()
+
+    @patch('tools.send_approval_email_tool.smtplib.SMTP')
+    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch('builtins.open')
+    @patch.dict('os.environ', {
+        'EMAIL_SMTP_SERVER': 'smtp.test.com',
+        'EMAIL_SMTP_PORT': '587',
+        'EMAIL_FROM': 'test@test.com',
+        'EMAIL_PASSWORD': 'pass',
+        'EMAIL_TO': 'admin@test.com',
+    })
+    def test_drift_alert_handles_smtp_failure(self, mock_open, mock_yaml, mock_smtp):
+        from tools.send_approval_email_tool import send_drift_alert_email
+
+        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception('SMTP down')
+        # Should not raise
+        send_drift_alert_email([{'metric_name': 'x', 'value': 1, 'threshold': 5, 'description': 'x', 'suggested_actions': []}])
+
+    @patch('tools.send_approval_email_tool.smtplib.SMTP')
+    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch('builtins.open')
+    @patch.dict('os.environ', {
+        'EMAIL_SMTP_SERVER': 'smtp.test.com',
+        'EMAIL_SMTP_PORT': '587',
+        'EMAIL_FROM': 'test@test.com',
+        'EMAIL_PASSWORD': 'pass',
+        'EMAIL_TO': 'admin@test.com',
+    })
+    def test_drift_recovery_handles_smtp_failure(self, mock_open, mock_yaml, mock_smtp):
+        from tools.send_approval_email_tool import send_drift_recovery_email
+
+        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception('SMTP down')
+        # Should not raise
+        send_drift_recovery_email([{'metric_name': 'x', 'value': 1, 'description': 'x'}])

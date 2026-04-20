@@ -499,3 +499,52 @@ class TestMemoryInit:
     def test_get_pending_approval_returns_none(self, memory):
         """Line 197: returns None when token not found."""
         assert memory.get_pending_approval('nonexistent-token') is None
+
+
+class TestMemoryDrift:
+    """Tests for drift detection memory methods."""
+
+    def test_get_drift_metrics(self, memory):
+        run_id = 'drift-metrics-test'
+        memory.create_workflow_run(run_id)
+        memory.update_workflow_run(run_id, {
+            'status': 'success', 'steps_completed': [], 'overall_score': 8.5,
+        })
+        memory.update_workflow_revision_metrics(run_id, tool_calls=3, draft_attempts=1, score_progression=[8.5])
+
+        data = memory.get_drift_metrics(window=5)
+        assert len(data['runs']) >= 1
+        assert data['runs'][0]['overall_score'] == 8.5
+        assert data['runs'][0]['status'] == 'success'
+
+    def test_create_and_get_active_drift_alerts(self, memory):
+        alert_id = memory.create_drift_alert(
+            metric_name='test_metric', metric_value=5.0, threshold=7.0, run_id='run-1'
+        )
+        assert alert_id > 0
+
+        alerts = memory.get_active_drift_alerts()
+        assert len(alerts) == 1
+        assert alerts[0]['metric_name'] == 'test_metric'
+        assert alerts[0]['metric_value'] == 5.0
+
+    def test_resolve_drift_alert(self, memory):
+        memory.create_drift_alert(metric_name='to_resolve', metric_value=3.0, threshold=7.0)
+        memory.resolve_drift_alert('to_resolve')
+
+        alerts = memory.get_active_drift_alerts()
+        assert len(alerts) == 0
+
+    def test_resolve_nonexistent_alert(self, memory):
+        # Should not raise
+        memory.resolve_drift_alert('nonexistent_metric')
+
+    def test_has_active_alert(self, memory):
+        assert memory.has_active_alert('some_metric') is False
+        memory.create_drift_alert(metric_name='some_metric', metric_value=1.0, threshold=5.0)
+        assert memory.has_active_alert('some_metric') is True
+
+    def test_has_active_alert_after_resolve(self, memory):
+        memory.create_drift_alert(metric_name='resolved_metric', metric_value=1.0, threshold=5.0)
+        memory.resolve_drift_alert('resolved_metric')
+        assert memory.has_active_alert('resolved_metric') is False

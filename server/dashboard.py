@@ -102,3 +102,10 @@ def api_sources() -> Response:
 def api_cache() -> Response:
     """Return summary cache hit/miss statistics over the last 30 days."""
     return jsonify(memory.get_summary_cache_stats(30))
+
+
+@dashboard_bp.route('/dashboard/api/drift')
+def api_drift() -> Response:
+    """Return active drift alerts with full details."""
+    alerts = memory.get_active_drift_alerts()
+    return jsonify({'active_alerts': alerts, 'count': len(alerts)})

@@ -19,9 +19,15 @@ from tools.create_blog_taxonomy_tool import CreateBlogTaxonomyTool
 from tools.deduplicate_articles_tool import DeduplicateArticlesTool
 from tools.fetch_articles_tool import FetchArticlesTool
 from tools.fetch_scores_tool import FetchScoresTool
-from tools.send_approval_email_tool import SendApprovalEmailTool, send_failure_email
+from tools.send_approval_email_tool import (
+    SendApprovalEmailTool,
+    send_drift_alert_email,
+    send_drift_recovery_email,
+    send_failure_email,
+)
 from tools.summarize_article_tool import SummarizeArticleTool
 from utils.consolidate import consolidate_summaries
+from utils.drift_detector import DriftDetector
 from utils.logger.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -99,6 +105,26 @@ def _step_done(step_name: str, steps_completed: list[str]) -> bool:
         True if the step is in the completed list.
     """
     return step_name in steps_completed
+
+
+def _run_drift_check(memory: Memory, run_id: str) -> None:
+    """Run drift detection after workflow completion and send alerts.
+
+    Args:
+        memory: Memory instance.
+        run_id: The workflow run that triggered this check.
+    """
+    try:
+        detector = DriftDetector(memory=memory)
+        results = detector.check(run_id=run_id)
+
+        if results['new_alerts']:
+            send_drift_alert_email(results['new_alerts'])
+
+        if results['recoveries']:
+            send_drift_recovery_email(results['recoveries'])
+    except Exception as e:
+        logger.error(f'Drift check failed: {e}')
 
 
 @observe()
@@ -472,5 +498,8 @@ def _execute_workflow(
 
     # Housekeeping
     memory.purge_old_logs()
+
+    # Drift detection
+    _run_drift_check(memory, run_id)
 
     return result

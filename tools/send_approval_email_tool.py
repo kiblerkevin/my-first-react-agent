@@ -353,3 +353,131 @@ def send_failure_email(
         logger.info(f'Failure notification sent to {error_email_to} for run {run_id}')
     except Exception as e:
         logger.error(f'Failed to send failure notification email: {e}')
+
+
+def send_drift_alert_email(alerts: list[dict]) -> None:
+    """Send a drift alert email for newly breaching metrics.
+
+    Args:
+        alerts: List of alert dicts with metric_name, value, threshold,
+                description, and suggested_actions.
+    """
+    load_dotenv()
+
+    with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
+        config = yaml.safe_load(f)
+
+    if not config.get('failure_notification', {}).get('enabled', False):
+        logger.info('Failure notification disabled — skipping drift alert email.')
+        return
+
+    smtp_server = os.getenv('EMAIL_SMTP_SERVER')
+    smtp_port = int(os.getenv('EMAIL_SMTP_PORT', '587'))
+    email_from = os.getenv('EMAIL_FROM')
+    email_password = os.getenv('EMAIL_PASSWORD')
+    error_email_to = os.getenv('ERROR_EMAIL_TO', os.getenv('EMAIL_TO'))
+
+    metrics_html = ''
+    for alert in alerts:
+        actions_html = ''.join(
+            f'<li>{a}</li>' for a in alert.get('suggested_actions', [])
+        )
+        metrics_html += f"""
+        <tr>
+            <td><strong>{alert['metric_name']}</strong></td>
+            <td>{alert['description']}</td>
+            <td>{alert['value']}</td>
+            <td>{alert['threshold']}</td>
+            <td><ul>{actions_html}</ul></td>
+        </tr>
+        """
+
+    metric_names = ', '.join(a['metric_name'] for a in alerts)
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+        <h1 style="color: #ff9800;">⚠️ Drift Alert</h1>
+        <p>The following metrics have breached their thresholds:</p>
+        <table border='1' cellpadding='8' cellspacing='0'>
+            <tr><th>Metric</th><th>Description</th><th>Value</th><th>Threshold</th><th>Suggested Actions</th></tr>
+            {metrics_html}
+        </table>
+        <p style="color: #666; font-size: 12px; margin-top: 20px;">
+            This alert will not repeat until the metric recovers and breaches again.
+        </p>
+    </body>
+    </html>
+    """
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'[Drift Alert] Chicago Sports Recap — {metric_names}'
+        msg['From'] = email_from or ''
+        msg['To'] = error_email_to or ''
+        msg.attach(MIMEText(html, 'html'))
+
+        with smtplib.SMTP(smtp_server or '', smtp_port) as server:
+            server.starttls()
+            server.login(email_from or '', email_password or '')
+            server.sendmail(email_from or '', error_email_to or '', msg.as_string())
+
+        logger.info(f'Drift alert email sent for: {metric_names}')
+    except Exception as e:
+        logger.error(f'Failed to send drift alert email: {e}')
+
+
+def send_drift_recovery_email(recoveries: list[dict]) -> None:
+    """Send a recovery email when previously drifting metrics return to normal.
+
+    Args:
+        recoveries: List of recovery dicts with metric_name, value, description.
+    """
+    load_dotenv()
+
+    with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
+        config = yaml.safe_load(f)
+
+    if not config.get('failure_notification', {}).get('enabled', False):
+        logger.info('Failure notification disabled — skipping drift recovery email.')
+        return
+
+    smtp_server = os.getenv('EMAIL_SMTP_SERVER')
+    smtp_port = int(os.getenv('EMAIL_SMTP_PORT', '587'))
+    email_from = os.getenv('EMAIL_FROM')
+    email_password = os.getenv('EMAIL_PASSWORD')
+    error_email_to = os.getenv('ERROR_EMAIL_TO', os.getenv('EMAIL_TO'))
+
+    rows_html = ''.join(
+        f"<tr><td><strong>{r['metric_name']}</strong></td><td>{r['description']}</td><td>{r['value']}</td></tr>"
+        for r in recoveries
+    )
+    metric_names = ', '.join(r['metric_name'] for r in recoveries)
+
+    html = f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+        <h1 style="color: #28a745;">✅ Drift Recovered</h1>
+        <p>The following metrics have returned to normal:</p>
+        <table border='1' cellpadding='8' cellspacing='0'>
+            <tr><th>Metric</th><th>Description</th><th>Current Value</th></tr>
+            {rows_html}
+        </table>
+    </body>
+    </html>
+    """
+
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f'[Drift Recovered] Chicago Sports Recap — {metric_names}'
+        msg['From'] = email_from or ''
+        msg['To'] = error_email_to or ''
+        msg.attach(MIMEText(html, 'html'))
+
+        with smtplib.SMTP(smtp_server or '', smtp_port) as server:
+            server.starttls()
+            server.login(email_from or '', email_password or '')
+            server.sendmail(email_from or '', error_email_to or '', msg.as_string())
+
+        logger.info(f'Drift recovery email sent for: {metric_names}')
+    except Exception as e:
+        logger.error(f'Failed to send drift recovery email: {e}')
