@@ -72,8 +72,15 @@ exclude_lines = [
 ]
 
 [tool.mutmut]
-paths_to_mutate = "utils/consolidate.py,tools/fetch_articles_tool.py,tools/deduplicate_articles_tool.py,tools/evaluate_blog_post_tool.py,memory/memory.py"
-tests_dir = "tests"
+paths_to_mutate = [
+    "utils/consolidate.py",
+    "tools/fetch_articles_tool.py",
+    "tools/deduplicate_articles_tool.py",
+    "tools/evaluate_blog_post_tool.py",
+    "memory/memory.py",
+]
+tests_dir = ["tests"]
+pytest_add_cli_args = ["-x", "-q", "--no-header", "--tb=no", "-o", "addopts="]
 
 [[tool.mypy.overrides]]
 module = [

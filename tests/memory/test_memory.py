@@ -1,7 +1,10 @@
 """Tests for memory/memory.py."""
 
+import os
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
+
+from memory.database import init_db
 
 
 class TestMemoryCRUD:
@@ -548,3 +551,115 @@ class TestMemoryDrift:
         memory.create_drift_alert(metric_name='resolved_metric', metric_value=1.0, threshold=5.0)
         memory.resolve_drift_alert('resolved_metric')
         assert memory.has_active_alert('resolved_metric') is False
+
+
+class TestMemoryBackup:
+    """Tests for database backup and purge methods."""
+
+    def test_backup_database_creates_file(self, memory, tmp_path):
+        backup_dir = str(tmp_path / 'backups')
+        memory.backup_path = backup_dir
+
+        result = memory.backup_database()
+
+        assert result is not None
+        assert os.path.exists(result)
+        assert 'articles_' in result
+
+    def test_backup_database_returns_none_on_failure(self, memory, tmp_path):
+        memory.db_path = str(tmp_path / 'nonexistent' / 'deep' / 'db.sqlite')
+        memory.backup_path = str(tmp_path / 'backups')
+
+        # Patch sqlite3.connect to raise on the source connection
+        import unittest.mock
+        with unittest.mock.patch('sqlite3.connect', side_effect=Exception('Cannot open')):
+            result = memory.backup_database()
+
+        assert result is None
+
+    def test_purge_old_backups(self, memory, tmp_path):
+        backup_dir = str(tmp_path / 'backups')
+        os.makedirs(backup_dir)
+        memory.backup_path = backup_dir
+        memory.backup_retention_days = 30
+
+        # Create an old backup
+        old_file = os.path.join(backup_dir, 'articles_old.db')
+        with open(old_file, 'w') as f:
+            f.write('old')
+        old_time = (datetime.utcnow() - timedelta(days=60)).timestamp()
+        os.utime(old_file, (old_time, old_time))
+
+        # Create a recent backup
+        new_file = os.path.join(backup_dir, 'articles_new.db')
+        with open(new_file, 'w') as f:
+            f.write('new')
+
+        memory.purge_old_backups()
+
+        assert not os.path.exists(old_file)
+        assert os.path.exists(new_file)
+
+    def test_purge_old_backups_no_dir(self, memory):
+        memory.backup_path = '/nonexistent/backups'
+        # Should not raise
+        memory.purge_old_backups()
+
+    def test_purge_old_backups_skips_directories(self, memory, tmp_path):
+        backup_dir = str(tmp_path / 'backups')
+        os.makedirs(os.path.join(backup_dir, 'subdir'))
+        memory.backup_path = backup_dir
+        memory.backup_retention_days = 0  # purge everything
+
+        memory.purge_old_backups()
+        # subdir should still exist
+        assert os.path.exists(os.path.join(backup_dir, 'subdir'))
+
+
+class TestMemoryInitBackupConfig:
+    """Tests for Memory.__init__ backup config loading."""
+
+    @patch('memory.memory.yaml.safe_load')
+    @patch('builtins.open')
+    @patch('memory.memory.init_db')
+    def test_loads_backup_config(self, mock_init_db, mock_open, mock_yaml):
+        mock_yaml.return_value = {
+            'database': {'path': 'test.db', 'retention_days': 14, 'log_retention_days': 7},
+            'backup': {'path': 'my/backups', 'retention_days': 60},
+        }
+        mock_init_db.return_value = MagicMock()
+
+        from memory.memory import Memory
+        m = Memory()
+        assert m.backup_path == 'my/backups'
+        assert m.backup_retention_days == 60
+
+    @patch('memory.memory.yaml.safe_load')
+    @patch('builtins.open')
+    @patch('memory.memory.init_db')
+    def test_defaults_when_backup_config_missing(self, mock_init_db, mock_open, mock_yaml):
+        mock_yaml.return_value = {
+            'database': {'path': 'test.db'},
+        }
+        mock_init_db.return_value = MagicMock()
+
+        from memory.memory import Memory
+        m = Memory()
+        assert m.backup_path == 'data/backups'
+        assert m.backup_retention_days == 30
+
+
+class TestWALMode:
+    """Test that WAL mode is enabled on database init."""
+
+    def test_wal_mode_enabled(self, tmp_path):
+        from memory.database import get_session
+
+        db_path = str(tmp_path / 'wal_test.db')
+        engine = init_db(db_path)
+
+        # Query via SQLAlchemy to trigger the connect event
+        session = get_session(engine)
+        result = session.execute(__import__('sqlalchemy').text('PRAGMA journal_mode')).fetchone()
+        session.close()
+        assert result[0] == 'wal'

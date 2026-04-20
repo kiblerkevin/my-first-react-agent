@@ -284,6 +284,8 @@ def get_engine(db_path: str = 'data/articles.db') -> Engine:
 def init_db(db_path: str = 'data/articles.db') -> Engine:
     """Initialize the database, creating all tables if needed.
 
+    Enables WAL mode for better concurrent read/write performance.
+
     Args:
         db_path: Path to the SQLite database file.
 
@@ -291,6 +293,15 @@ def init_db(db_path: str = 'data/articles.db') -> Engine:
         SQLAlchemy Engine instance.
     """
     engine = get_engine(db_path)
+
+    from sqlalchemy import event
+
+    @event.listens_for(engine, 'connect')
+    def _set_wal_mode(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute('PRAGMA journal_mode=WAL')
+        cursor.close()
+
     Base.metadata.create_all(engine)
     return engine
 

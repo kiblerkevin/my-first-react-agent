@@ -11,7 +11,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
-from flask import Flask, redirect, render_template_string, request
+from flask import Flask, jsonify, redirect, render_template_string, request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -116,6 +116,12 @@ OAUTH_ERROR_PAGE = """
 <p>{{ error }}</p>
 </body></html>
 """
+
+
+@app.route('/health')
+def health() -> Any:
+    """Return service health status."""
+    return jsonify({'status': 'ok'})
 
 
 # --- OAuth Routes ---

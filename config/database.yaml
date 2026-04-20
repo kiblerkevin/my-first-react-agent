@@ -3,6 +3,10 @@ database:
   retention_days: 30
   log_retention_days: 30
 
+backup:
+  path: "data/backups"
+  retention_days: 30
+
 taxonomy:
   default_category: "Daily Recap"
   max_player_tags: 4

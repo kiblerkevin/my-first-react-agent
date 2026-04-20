@@ -33,8 +33,11 @@ class Memory:
         with open(DATABASE_CONFIG_PATH, 'r') as f:
             config = yaml.safe_load(f)
         db_path = config['database']['path']
+        self.db_path = db_path
         self.retention_days = config['database'].get('retention_days', 30)
         self.log_retention_days = config['database'].get('log_retention_days', 30)
+        self.backup_path = config.get('backup', {}).get('path', 'data/backups')
+        self.backup_retention_days = config.get('backup', {}).get('retention_days', 30)
         self.engine = init_db(db_path)
 
     def get_seen_urls(self) -> set:
@@ -963,6 +966,56 @@ class Memory:
             )
         finally:
             session.close()
+
+    # --- Backup methods ---
+
+    def backup_database(self) -> str | None:
+        """Create a timestamped backup of the SQLite database using the backup API.
+
+        Returns:
+            Path to the backup file, or None on failure.
+        """
+        import os
+        import sqlite3
+
+        os.makedirs(self.backup_path, exist_ok=True)
+        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        backup_file = os.path.join(self.backup_path, f'articles_{timestamp}.db')
+
+        try:
+            source = sqlite3.connect(self.db_path)
+            dest = sqlite3.connect(backup_file)
+            source.backup(dest)
+            dest.close()
+            source.close()
+            logger.info(f'Database backup created: {backup_file}')
+            return backup_file
+        except Exception as e:
+            logger.error(f'Database backup failed: {e}')
+            return None
+
+    def purge_old_backups(self) -> None:
+        """Delete backup files older than the configured retention period."""
+        import os
+        from datetime import timedelta
+
+        if not os.path.exists(self.backup_path):
+            return
+
+        cutoff = datetime.utcnow() - timedelta(days=self.backup_retention_days)
+        count = 0
+        for filename in os.listdir(self.backup_path):
+            filepath = os.path.join(self.backup_path, filename)
+            if not os.path.isfile(filepath):
+                continue
+            modified = datetime.utcfromtimestamp(os.path.getmtime(filepath))
+            if modified < cutoff:
+                os.remove(filepath)
+                count += 1
+        if count:
+            logger.info(
+                f'Purged {count} backup(s) older than {self.backup_retention_days} days.'
+            )
 
     # --- Drift detection methods ---
 

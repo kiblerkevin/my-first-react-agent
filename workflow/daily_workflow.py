@@ -498,6 +498,8 @@ def _execute_workflow(
 
     # Housekeeping
     memory.purge_old_logs()
+    memory.backup_database()
+    memory.purge_old_backups()
 
     # Drift detection
     _run_drift_check(memory, run_id)

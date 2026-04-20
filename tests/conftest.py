@@ -2,9 +2,18 @@
 
 import json
 import os
+import sys
 import tempfile
 
 import pytest
+
+# Ensure project root is on path (needed for mutmut which runs from mutants/ dir)
+_this_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.dirname(_this_dir)
+# If running inside mutants/, go up one more level to the real project root
+if os.path.basename(_project_root) == 'mutants':
+    _project_root = os.path.dirname(_project_root)
+sys.path.insert(0, _project_root)
 
 from memory.database import init_db
 from memory.memory import Memory
@@ -267,8 +276,11 @@ def memory(tmp_db, monkeypatch):
 
     class _TestMemory(Memory):
         def __init__(self, db_path):
+            self.db_path = db_path
             self.retention_days = 30
             self.log_retention_days = 30
+            self.backup_path = 'data/backups'
+            self.backup_retention_days = 30
             self.engine = init_db(db_path)
 
     return _TestMemory(tmp_db)
