@@ -24,3 +24,7 @@ jobs:
   typecheck:
     name: Mypy
     uses: ./.github/workflows/mypy.yml
+
+  test:
+    name: Tests
+    uses: ./.github/workflows/tests.yml
