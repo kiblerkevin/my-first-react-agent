@@ -7,6 +7,7 @@ import yaml
 from flask import Flask, request, render_template_string, redirect
 from dotenv import load_dotenv
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.triggers.cron import CronTrigger
 
 # Add project root to path so imports work
@@ -313,18 +314,27 @@ def start_scheduler():
     with open(SCHEDULER_CONFIG_PATH, 'r') as f:
         config = yaml.safe_load(f)
 
-    scheduler = BackgroundScheduler()
+    executors = {
+        'default': ThreadPoolExecutor(20)
+    }
+    scheduler = BackgroundScheduler(executors=executors)
 
-    # Expiry checker
+    # Expiry checker — misfire_grace_time allows late execution without warnings
     expiry_interval = config['expiry_checker']['interval_minutes']
-    scheduler.add_job(check_expired_approvals, 'interval', minutes=expiry_interval)
+    scheduler.add_job(
+        check_expired_approvals,
+        'interval',
+        minutes=expiry_interval,
+        misfire_grace_time=3600
+    )
     logger.info(f"Expiry checker started (interval: {expiry_interval} minutes)")
 
-    # Daily workflow
+    # Daily workflow — misfire_grace_time allows up to 1 hour late start
     wf = config['daily_workflow']
     scheduler.add_job(
         run_scheduled_workflow,
-        CronTrigger(hour=wf['cron_hour'], minute=wf['cron_minute'], timezone=wf['timezone'])
+        CronTrigger(hour=wf['cron_hour'], minute=wf['cron_minute'], timezone=wf['timezone']),
+        misfire_grace_time=3600
     )
     logger.info(f"Daily workflow scheduled at {wf['cron_hour']}:{wf['cron_minute']:02d} {wf['timezone']}")
 

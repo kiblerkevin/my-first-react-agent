@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.chicagosportsrecap.cloudflare-tunnel</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <!-- UPDATE: Replace with actual cloudflared path -->
+        <string>/opt/homebrew/bin/cloudflared</string>
+        <string>tunnel</string>
+        <string>run</string>
+        <!-- UPDATE: Replace with your tunnel name -->
+        <string>PLACEHOLDER_TUNNEL_NAME</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/kevin/Projects/my-first-react-agent</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/kevin/Projects/my-first-react-agent/logs/cloudflare_tunnel_stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/kevin/Projects/my-first-react-agent/logs/cloudflare_tunnel_stderr.log</string>
+</dict>
+</plist>
