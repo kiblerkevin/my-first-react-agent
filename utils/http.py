@@ -1,19 +1,22 @@
+"""HTTP utilities with rate-limit retry logic."""
+
 import time
+from typing import Any
 
 import requests
 import yaml
 
 from utils.logger.logger import setup_logger
 
-
 logger = setup_logger(__name__)
 
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
-_rate_limit_config = None
+_rate_limit_config: dict[str, Any] | None = None
 
 
-def _get_config():
+def _get_config() -> dict[str, Any]:
+    """Load rate limiting config from orchestration.yaml, cached after first call."""
     global _rate_limit_config
     if _rate_limit_config is None:
         with open(ORCHESTRATION_CONFIG_PATH, 'r') as f:
@@ -22,14 +25,22 @@ def _get_config():
     return _rate_limit_config
 
 
-def rate_limited_request(method: str, url: str, **kwargs) -> requests.Response:
-    """
-    Wraps requests.get/post with retry-on-429 logic.
+def rate_limited_request(method: str, url: str, **kwargs: Any) -> requests.Response:
+    """Wrap requests with retry-on-429 logic.
+
     Reads Retry-After header if present, otherwise uses exponential backoff.
+
+    Args:
+        method: HTTP method (GET, POST, etc.).
+        url: Request URL.
+        **kwargs: Passed through to requests.request.
+
+    Returns:
+        The HTTP response.
     """
     config = _get_config()
-    max_retries = config.get('max_retries', 3)
-    base_delay = config.get('base_delay_seconds', 1.0)
+    max_retries: int = config.get('max_retries', 3)
+    base_delay: float = config.get('base_delay_seconds', 1.0)
 
     for attempt in range(max_retries + 1):
         response = requests.request(method, url, **kwargs)
@@ -38,7 +49,9 @@ def rate_limited_request(method: str, url: str, **kwargs) -> requests.Response:
             return response
 
         if attempt == max_retries:
-            logger.warning(f"Rate limit exceeded after {max_retries} retries: {method} {url}")
+            logger.warning(
+                f'Rate limit exceeded after {max_retries} retries: {method} {url}'
+            )
             return response
 
         retry_after = response.headers.get('Retry-After')
@@ -46,11 +59,14 @@ def rate_limited_request(method: str, url: str, **kwargs) -> requests.Response:
             try:
                 delay = float(retry_after)
             except ValueError:
-                delay = base_delay * (2 ** attempt)
+                delay = base_delay * (2**attempt)
         else:
-            delay = base_delay * (2 ** attempt)
+            delay = base_delay * (2**attempt)
 
-        logger.warning(f"Rate limited (429) on {method} {url} — retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+        logger.warning(
+            f'Rate limited (429) on {method} {url} — retrying in {delay:.1f}s '
+            f'(attempt {attempt + 1}/{max_retries})'
+        )
         time.sleep(delay)
 
-    return response
+    return response  # type: ignore[possibly-undefined]

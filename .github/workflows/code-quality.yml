@@ -1,0 +1,26 @@
+name: Code Quality
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Ruff Lint
+    uses: ./.github/workflows/ruff.yml
+
+  format:
+    name: Ruff Format
+    uses: ./.github/workflows/ruff.yml
+    with:
+      mode: format
+
+  typecheck:
+    name: Mypy
+    uses: ./.github/workflows/mypy.yml

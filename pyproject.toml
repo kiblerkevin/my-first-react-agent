@@ -1,0 +1,63 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "F",      # pyflakes
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "I",      # isort
+    "B",      # bugbear
+    "SIM",    # simplify
+    "D",      # pydocstyle
+]
+ignore = [
+    "D100",   # missing docstring in public module
+    "D104",   # missing docstring in public package
+    "D106",   # missing docstring in public nested class
+    "D107",   # missing docstring in __init__ (covered by class docstring)
+    "D203",   # one-blank-line-before-class (conflicts with D211)
+    "D213",   # multi-line-summary-second-line (conflicts with D212)
+    "D413",   # missing blank line after last section
+    "E501",   # line too long (handled by formatter for code; unavoidable in strings)
+]
+fixable = ["I", "F401", "W", "E"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+"prompts/*" = ["D", "E501"]
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+    "tools.*",
+    "workflow.*",
+    "memory.*",
+    "agent.*",
+]
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "serpapi",
+    "serpapi.*",
+    "newsapi",
+    "newsapi.*",
+    "langfuse",
+    "langfuse.*",
+    "apscheduler",
+    "apscheduler.*",
+]
+ignore_missing_imports = true

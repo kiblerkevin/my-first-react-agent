@@ -1,24 +1,25 @@
+"""Flask approval server with OAuth, approval routes, dashboard, and scheduler."""
+
+import json
 import os
 import sys
-import json
 import time
+from typing import Any
 
 import yaml
-from flask import Flask, request, render_template_string, redirect
-from dotenv import load_dotenv
-from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from dotenv import load_dotenv
+from flask import Flask, redirect, render_template_string, request
 
-# Add project root to path so imports work
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from memory.memory import Memory
-from tools.wordpress_publish_tool import WordPressPublishTool
 from models.inputs.wordpress_publish_input import WordPressPublishInput
 from server.dashboard import dashboard_bp
+from tools.wordpress_publish_tool import WordPressPublishTool
 from utils.logger.logger import setup_logger
-
 
 load_dotenv()
 logger = setup_logger(__name__)
@@ -32,7 +33,9 @@ memory = Memory()
 
 WP_CLIENT_ID = os.getenv('WORDPRESS_CLIENT_ID')
 WP_CLIENT_SECRET = os.getenv('WORDPRESS_CLIENT_SECRET')
-WP_REDIRECT_URI = os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000') + '/oauth/callback'
+WP_REDIRECT_URI = (
+    os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000') + '/oauth/callback'
+)
 WP_AUTHORIZE_URL = 'https://public-api.wordpress.com/oauth2/authorize'
 WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'
 
@@ -117,20 +120,23 @@ OAUTH_ERROR_PAGE = """
 
 # --- OAuth Routes ---
 
+
 @app.route('/oauth/start')
-def oauth_start():
+def oauth_start() -> Any:
+    """Redirect to WordPress OAuth authorization page."""
     params = {
         'client_id': WP_CLIENT_ID,
         'redirect_uri': WP_REDIRECT_URI,
         'response_type': 'code',
-        'scope': 'global'
+        'scope': 'global',
     }
-    auth_url = f"{WP_AUTHORIZE_URL}?" + "&".join(f"{k}={v}" for k, v in params.items())
+    auth_url = f'{WP_AUTHORIZE_URL}?' + '&'.join(f'{k}={v}' for k, v in params.items())
     return redirect(auth_url)
 
 
 @app.route('/oauth/callback')
-def oauth_callback():
+def oauth_callback() -> Any:
+    """Handle WordPress OAuth callback and store the access token."""
     code = request.args.get('code')
     error = request.args.get('error')
 
@@ -138,17 +144,26 @@ def oauth_callback():
         return render_template_string(OAUTH_ERROR_PAGE, error=error), 400
 
     if not code:
-        return render_template_string(OAUTH_ERROR_PAGE, error='No authorization code received.'), 400
+        return (
+            render_template_string(
+                OAUTH_ERROR_PAGE, error='No authorization code received.'
+            ),
+            400,
+        )
 
     try:
         import requests as req
-        response = req.post(WP_TOKEN_URL, data={
-            'client_id': WP_CLIENT_ID,
-            'client_secret': WP_CLIENT_SECRET,
-            'redirect_uri': WP_REDIRECT_URI,
-            'code': code,
-            'grant_type': 'authorization_code'
-        })
+
+        response = req.post(
+            WP_TOKEN_URL,
+            data={
+                'client_id': WP_CLIENT_ID,
+                'client_secret': WP_CLIENT_SECRET,
+                'redirect_uri': WP_REDIRECT_URI,
+                'code': code,
+                'grant_type': 'authorization_code',
+            },
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -156,20 +171,24 @@ def oauth_callback():
         blog_id = str(data.get('blog_id', ''))
         blog_url = data.get('blog_url', '')
 
-        memory.save_oauth_token('wordpress', access_token, blog_id=blog_id, blog_url=blog_url)
-        logger.info(f"WordPress OAuth token saved for blog: {blog_url}")
+        memory.save_oauth_token(
+            'wordpress', access_token, blog_id=blog_id, blog_url=blog_url
+        )
+        logger.info(f'WordPress OAuth token saved for blog: {blog_url}')
 
         return render_template_string(OAUTH_SUCCESS_PAGE, blog_url=blog_url)
 
     except Exception as e:
-        logger.error(f"OAuth callback error: {e}")
+        logger.error(f'OAuth callback error: {e}')
         return render_template_string(OAUTH_ERROR_PAGE, error=str(e)), 500
 
 
 # --- Approval Routes ---
 
+
 @app.route('/approve/<token>')
-def approve(token):
+def approve(token: str) -> Any:
+    """Approve a blog post and trigger WordPress publish."""
     approval = memory.get_pending_approval(token)
     if not approval:
         return render_template_string(INVALID_TOKEN_PAGE), 404
@@ -178,52 +197,75 @@ def approve(token):
         return render_template_string(ALREADY_RESOLVED_PAGE, status=approval['status'])
 
     memory.update_approval_status(token, 'approved')
-    logger.info(f"Blog post approved: {approval['blog_title']}")
+    logger.info(f'Blog post approved: {approval["blog_title"]}')
 
     publish_result = None
     try:
-        taxonomy = json.loads(approval.get('taxonomy_data', '{}'))
+        taxonomy: dict[str, Any] = json.loads(approval.get('taxonomy_data', '{}'))
         publish_tool = WordPressPublishTool()
-        publish_result = publish_tool.execute(WordPressPublishInput(
-            title=approval['blog_title'],
-            content=approval['blog_content'],
-            excerpt=approval.get('blog_excerpt', ''),
-            categories=taxonomy.get('categories', []),
-            tags=taxonomy.get('tags', [])
-        ))
+        publish_result = publish_tool.execute(
+            WordPressPublishInput(
+                title=approval['blog_title'],
+                content=approval['blog_content'],
+                excerpt=approval.get('blog_excerpt', ''),
+                categories=taxonomy.get('categories', []),
+                tags=taxonomy.get('tags', []),
+            )
+        )
         if publish_result.error:
-            logger.error(f"WordPress publish error: {publish_result.error}")
+            logger.error(f'WordPress publish error: {publish_result.error}')
         else:
-            logger.info(f"Published to WordPress: post_id={publish_result.post_id}")
-            # Persist publish result — find the most recent successful workflow run
-            from memory.database import get_session, WorkflowRun as WR
+            logger.info(f'Published to WordPress: post_id={publish_result.post_id}')
+            from memory.database import WorkflowRun as WR
+            from memory.database import get_session
+
             session = get_session(memory.engine)
-            last_run = session.query(WR).filter_by(status='success').order_by(WR.id.desc()).first()
+            last_run = (
+                session.query(WR)
+                .filter_by(status='success')
+                .order_by(WR.id.desc())
+                .first()
+            )
             if last_run:
                 memory.update_workflow_publish_result(
-                    last_run.run_id, publish_result.post_id, publish_result.post_url, True
+                    last_run.run_id,
+                    publish_result.post_id,
+                    publish_result.post_url,
+                    True,
                 )
             session.close()
     except Exception as e:
-        logger.error(f"Error triggering WordPress publish: {e}")
+        logger.error(f'Error triggering WordPress publish: {e}')
 
     title = approval['blog_title']
-    post_info = ""
+    post_info = ''
     if publish_result and publish_result.post_id:
-        post_info = f"<p>WordPress draft created: <a href='{publish_result.post_url}'>{publish_result.post_url}</a></p>"
-    elif publish_result and publish_result.error and 'oauth' in publish_result.error.lower():
         post_info = (
-            "<p style='color: #dc3545;'><strong>WordPress publish failed:</strong> OAuth token is invalid or revoked. "
+            f'<p>WordPress draft created: '
+            f"<a href='{publish_result.post_url}'>{publish_result.post_url}</a></p>"
+        )
+    elif (
+        publish_result
+        and publish_result.error
+        and 'oauth' in publish_result.error.lower()
+    ):
+        post_info = (
+            "<p style='color: #dc3545;'><strong>WordPress publish failed:</strong> "
+            'OAuth token is invalid or revoked. '
             "<a href='/oauth/start'>Re-authorize WordPress</a> and try again.</p>"
         )
     elif publish_result and publish_result.error:
-        post_info = f"<p style='color: #dc3545;'><strong>WordPress publish failed:</strong> {publish_result.error}</p>"
+        post_info = (
+            f"<p style='color: #dc3545;'><strong>WordPress publish failed:</strong> "
+            f'{publish_result.error}</p>'
+        )
 
     return render_template_string(APPROVED_PAGE, title=title, post_info=post_info)
 
 
 @app.route('/reject/<token>', methods=['GET', 'POST'])
-def reject(token):
+def reject(token: str) -> Any:
+    """Show rejection form (GET) or process rejection with feedback (POST)."""
     approval = memory.get_pending_approval(token)
     if not approval:
         return render_template_string(INVALID_TOKEN_PAGE), 404
@@ -234,15 +276,18 @@ def reject(token):
     if request.method == 'GET':
         return render_template_string(REJECT_FORM_PAGE, title=approval['blog_title'])
 
-    feedback = request.form.get('feedback', '').strip() or None
+    feedback: str | None = request.form.get('feedback', '').strip() or None
     memory.update_approval_status(token, 'rejected', feedback=feedback)
-    logger.info(f"Blog post rejected: {approval['blog_title']} (feedback: {feedback})")
+    logger.info(f'Blog post rejected: {approval["blog_title"]} (feedback: {feedback})')
 
-    return render_template_string(REJECTED_PAGE, title=approval['blog_title'], feedback=feedback)
+    return render_template_string(
+        REJECTED_PAGE, title=approval['blog_title'], feedback=feedback
+    )
 
 
 @app.route('/status/<token>')
-def status(token):
+def status(token: str) -> Any:
+    """Show the current status of an approval request."""
     approval = memory.get_pending_approval(token)
     if not approval:
         return render_template_string(INVALID_TOKEN_PAGE), 404
@@ -252,91 +297,107 @@ def status(token):
 
 # --- Background Jobs ---
 
-def check_expired_approvals():
+
+def check_expired_approvals() -> None:
+    """Auto-archive any pending approvals that have passed their expiry time."""
     expired = memory.get_expired_approvals()
     for approval in expired:
         memory.update_approval_status(approval['token'], 'expired')
-        logger.info(f"Auto-archived expired approval: {approval['blog_title']}")
+        logger.info(f'Auto-archived expired approval: {approval["blog_title"]}')
     if expired:
-        logger.info(f"Archived {len(expired)} expired approval(s).")
+        logger.info(f'Archived {len(expired)} expired approval(s).')
 
 
-def run_scheduled_workflow():
+def run_scheduled_workflow() -> None:
+    """Run the daily workflow with exponential backoff retry."""
     with open(SCHEDULER_CONFIG_PATH, 'r') as f:
-        config = yaml.safe_load(f)
+        config: dict[str, Any] = yaml.safe_load(f)
 
-    max_retries = config['retry']['max_retries']
-    base_delay = config['retry']['base_delay_seconds']
-    max_articles_per_team = config['daily_workflow']['max_articles_per_team']
+    max_retries: int = config['retry']['max_retries']
+    base_delay: float = config['retry']['base_delay_seconds']
+    max_articles_per_team: int = config['daily_workflow']['max_articles_per_team']
 
     from workflow.daily_workflow import run_daily_workflow
 
-    failed_run_id = None
+    failed_run_id: str | None = None
 
     for attempt in range(max_retries):
         try:
-            logger.info(f"Daily workflow attempt {attempt + 1}/{max_retries}")
-            result = run_daily_workflow(
+            logger.info(f'Daily workflow attempt {attempt + 1}/{max_retries}')
+            result: dict[str, Any] = run_daily_workflow(
                 max_articles_per_team=max_articles_per_team,
-                resume_run_id=failed_run_id
+                resume_run_id=failed_run_id,
             )
 
             if result.get('skipped'):
-                logger.info(f"Daily workflow skipped (run_id={result.get('run_id')}): {result.get('skip_reason')}")
+                logger.info(
+                    f'Daily workflow skipped (run_id={result.get("run_id")}): '
+                    f'{result.get("skip_reason")}'
+                )
                 return
 
             logger.info(
-                f"Daily workflow completed (run_id={result.get('run_id')}): '{result['title']}' | "
-                f"score={result['overall_score']}/10 | email_sent={result['email_sent']}"
+                f'Daily workflow completed (run_id={result.get("run_id")}): '
+                f"'{result['title']}' | score={result['overall_score']}/10 | "
+                f'email_sent={result["email_sent"]}'
             )
             return
         except Exception as e:
-            delay = base_delay * (2 ** attempt)
-            # Extract run_id from the workflow run table for resume
+            delay = base_delay * (2**attempt)
             if not failed_run_id:
-                from memory.database import get_session, WorkflowRun
+                from memory.database import WorkflowRun, get_session
+
                 session = get_session(memory.engine)
-                last_run = session.query(WorkflowRun).filter_by(status='failed').order_by(WorkflowRun.id.desc()).first()
+                last_run = (
+                    session.query(WorkflowRun)
+                    .filter_by(status='failed')
+                    .order_by(WorkflowRun.id.desc())
+                    .first()
+                )
                 if last_run:
                     failed_run_id = last_run.run_id
                 session.close()
             logger.error(
-                f"Daily workflow failed (attempt {attempt + 1}/{max_retries}): {e} | "
-                f"resume_run_id={failed_run_id} | retrying in {delay}s..."
+                f'Daily workflow failed (attempt {attempt + 1}/{max_retries}): {e} | '
+                f'resume_run_id={failed_run_id} | retrying in {delay}s...'
             )
             if attempt < max_retries - 1:
                 time.sleep(delay)
 
-    logger.error(f"Daily workflow failed after {max_retries} attempts. Skipping today.")
+    logger.error(f'Daily workflow failed after {max_retries} attempts. Skipping today.')
 
 
-def start_scheduler():
+def start_scheduler() -> None:
+    """Start the APScheduler with expiry checker and daily workflow jobs."""
     with open(SCHEDULER_CONFIG_PATH, 'r') as f:
-        config = yaml.safe_load(f)
+        config: dict[str, Any] = yaml.safe_load(f)
 
-    executors = {
-        'default': ThreadPoolExecutor(20)
-    }
+    executors = {'default': ThreadPoolExecutor(20)}
     scheduler = BackgroundScheduler(executors=executors)
 
-    # Expiry checker — misfire_grace_time allows late execution without warnings
-    expiry_interval = config['expiry_checker']['interval_minutes']
+    expiry_interval: int = config['expiry_checker']['interval_minutes']
     scheduler.add_job(
         check_expired_approvals,
         'interval',
         minutes=expiry_interval,
-        misfire_grace_time=3600
+        misfire_grace_time=3600,
     )
-    logger.info(f"Expiry checker started (interval: {expiry_interval} minutes)")
+    logger.info(f'Expiry checker started (interval: {expiry_interval} minutes)')
 
-    # Daily workflow — misfire_grace_time allows up to 1 hour late start
-    wf = config['daily_workflow']
+    wf: dict[str, Any] = config['daily_workflow']
     scheduler.add_job(
         run_scheduled_workflow,
-        CronTrigger(hour=wf['cron_hour'], minute=wf['cron_minute'], timezone=wf['timezone']),
-        misfire_grace_time=3600
+        CronTrigger(
+            hour=wf['cron_hour'],
+            minute=wf['cron_minute'],
+            timezone=wf['timezone'],
+        ),
+        misfire_grace_time=3600,
     )
-    logger.info(f"Daily workflow scheduled at {wf['cron_hour']}:{wf['cron_minute']:02d} {wf['timezone']}")
+    logger.info(
+        f'Daily workflow scheduled at {wf["cron_hour"]}:{wf["cron_minute"]:02d} '
+        f'{wf["timezone"]}'
+    )
 
     scheduler.start()
 
@@ -346,5 +407,5 @@ def start_scheduler():
 if __name__ == '__main__':
     start_scheduler()
     port = int(os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000').split(':')[-1])
-    logger.info(f"Approval server starting on port {port}")
+    logger.info(f'Approval server starting on port {port}')
     app.run(host='0.0.0.0', port=port, debug=False)

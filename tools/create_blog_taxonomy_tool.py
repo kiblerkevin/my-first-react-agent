@@ -1,13 +1,15 @@
+"""Tool for deterministic WordPress taxonomy assignment."""
+
 from collections import Counter
+from typing import Any
 
 import yaml
 
-from tools.base_tool import BaseTool
+from memory.memory import Memory
 from models.inputs.create_blog_taxonomy_input import CreateBlogTaxonomyInput
 from models.outputs.create_blog_taxonomy_output import CreateBlogTaxonomyOutput
-from memory.memory import Memory
+from tools.base_tool import BaseTool
 from utils.logger.logger import setup_logger
-
 
 logger = setup_logger(__name__)
 
@@ -15,66 +17,76 @@ DATABASE_CONFIG_PATH = 'config/database.yaml'
 
 
 class CreateBlogTaxonomyTool(BaseTool):
-    model_config = {"arbitrary_types_allowed": True, "extra": "allow"}
+    """Assigns categories and tags based on teams and players mentioned."""
+
+    model_config = {'arbitrary_types_allowed': True, 'extra': 'allow'}
 
     input_model: type = CreateBlogTaxonomyInput
 
-    name: str = "create_blog_taxonomy"
+    name: str = 'create_blog_taxonomy'
     description: str = (
-        "Assigns WordPress categories and tags for a blog post based on teams covered "
+        'Assigns WordPress categories and tags for a blog post based on teams covered '
         "and players mentioned. Always assigns a 'Daily Recap' category plus one category "
-        "per team. Tags include team names and the top 4 most-mentioned players. "
-        "Resolves names to local database IDs and WordPress IDs where available."
+        'per team. Tags include team names and the top 4 most-mentioned players. '
+        'Resolves names to local database IDs and WordPress IDs where available.'
     )
-    input_schema: dict = {
-        "type": "object",
-        "properties": {
-            "teams_covered": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "Team names covered in the blog post."
+    input_schema: dict[str, Any] = {
+        'type': 'object',
+        'properties': {
+            'teams_covered': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': 'Team names covered in the blog post.',
             },
-            "players_mentioned": {
-                "type": "array",
-                "items": {"type": "string"},
-                "description": "All player names mentioned across article summaries."
-            }
+            'players_mentioned': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': 'All player names mentioned across article summaries.',
+            },
         },
-        "required": ["teams_covered"]
+        'required': ['teams_covered'],
     }
-    output_schema: dict = {
-        "type": "object",
-        "properties": {
-            "categories": {"type": "array", "items": {"type": "object"}},
-            "tags": {"type": "array", "items": {"type": "object"}},
-            "new_categories": {"type": "array", "items": {"type": "string"}},
-            "new_tags": {"type": "array", "items": {"type": "string"}}
-        }
+    output_schema: dict[str, Any] = {
+        'type': 'object',
+        'properties': {
+            'categories': {'type': 'array', 'items': {'type': 'object'}},
+            'tags': {'type': 'array', 'items': {'type': 'object'}},
+            'new_categories': {'type': 'array', 'items': {'type': 'string'}},
+            'new_tags': {'type': 'array', 'items': {'type': 'string'}},
+        },
     }
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize with taxonomy config and memory layer."""
         super().__init__(
             name=self.model_fields['name'].default,
             description=self.model_fields['description'].default,
             input_schema=self.model_fields['input_schema'].default,
-            output_schema=self.model_fields['output_schema'].default
+            output_schema=self.model_fields['output_schema'].default,
         )
         with open(DATABASE_CONFIG_PATH, 'r') as f:
             config = yaml.safe_load(f)
-        self.default_category = config['taxonomy']['default_category']
-        self.max_player_tags = config['taxonomy']['max_player_tags']
+        self.default_category: str = config['taxonomy']['default_category']
+        self.max_player_tags: int = config['taxonomy']['max_player_tags']
         self.memory = Memory()
 
     def execute(self, input: CreateBlogTaxonomyInput) -> CreateBlogTaxonomyOutput:
+        """Assign categories and tags for the blog post.
+
+        Args:
+            input: Teams covered and players mentioned.
+
+        Returns:
+            Taxonomy output with categories, tags, and newly created items.
+        """
         existing_categories = {c['name'] for c in self.memory.get_all_categories()}
         existing_tags = {t['name'] for t in self.memory.get_all_tags()}
 
-        categories = []
-        new_categories = []
-        tags = []
-        new_tags = []
+        categories: list[dict[str, Any]] = []
+        new_categories: list[str] = []
+        tags: list[dict[str, Any]] = []
+        new_tags: list[str] = []
 
-        # Assign categories: Daily Recap + one per team
         category_names = [self.default_category] + list(input.teams_covered)
         for name in category_names:
             cat = self.memory.get_or_create_category(name)
@@ -82,16 +94,16 @@ class CreateBlogTaxonomyTool(BaseTool):
             if name not in existing_categories:
                 new_categories.append(name)
 
-        # Assign tags: team names + top N players by mention frequency
-        tag_names = list(input.teams_covered)
+        tag_names: list[str] = list(input.teams_covered)
         if input.players_mentioned:
             player_counts = Counter(input.players_mentioned)
-            top_players = [name for name, _ in player_counts.most_common(self.max_player_tags)]
+            top_players = [
+                name for name, _ in player_counts.most_common(self.max_player_tags)
+            ]
             tag_names.extend(top_players)
 
-        # Deduplicate tag names preserving order
-        seen = set()
-        unique_tag_names = []
+        seen: set[str] = set()
+        unique_tag_names: list[str] = []
         for name in tag_names:
             if name not in seen:
                 seen.add(name)
@@ -104,13 +116,13 @@ class CreateBlogTaxonomyTool(BaseTool):
                 new_tags.append(name)
 
         logger.info(
-            f"Taxonomy assigned: {len(categories)} categories, {len(tags)} tags "
-            f"({len(new_categories)} new categories, {len(new_tags)} new tags)"
+            f'Taxonomy assigned: {len(categories)} categories, {len(tags)} tags '
+            f'({len(new_categories)} new categories, {len(new_tags)} new tags)'
         )
 
         return CreateBlogTaxonomyOutput(
             categories=categories,
             tags=tags,
             new_categories=new_categories,
-            new_tags=new_tags
+            new_tags=new_tags,
         )

@@ -1,0 +1,23 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.6
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-zero]
+        verbose: true
+      - id: ruff-format
+        verbose: true
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: bash -c 'mypy --config-file=pyproject.toml . || true'
+        language: system
+        types: [python]
+        pass_filenames: false
+        verbose: true
+
+default_stages: [pre-commit]
+# All hooks warn but do not block commits
+fail_fast: false
