@@ -16,7 +16,7 @@
 - [ ] R4. Concurrent request protection — atomic approval status updates
 
 ### Agent
-- [ ] A3. Fallback model configuration — try primary model, fall back to secondary on failure
+- [x] A3. Fallback model configuration — Gemini fallback (Haiku → Flash, Sonnet → Pro) on API outage, auth failure, or rate limit exhaustion
 
 ---
 

@@ -93,5 +93,9 @@ module = [
     "langfuse.*",
     "apscheduler",
     "apscheduler.*",
+    "google",
+    "google.*",
+    "genai",
+    "genai.*",
 ]
 ignore_missing_imports = true

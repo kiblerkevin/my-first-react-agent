@@ -53,8 +53,9 @@ class TestClaudeClientSendMessage:
         mock_sleep.assert_called_once()
 
     @patch('agent.claude_client.time.sleep')
-    def test_raises_after_max_retries(self, mock_sleep):
+    def test_raises_after_max_retries_no_fallback(self, mock_sleep):
         client, mock_api = _make_client()
+        client._fallback_config = {}  # no fallback
         from anthropic import RateLimitError
 
         error_response = MagicMock(status_code=429)
@@ -67,7 +68,7 @@ class TestClaudeClientSendMessage:
 
         import pytest
 
-        with pytest.raises(Exception, match='rate limit exceeded'):
+        with pytest.raises(Exception, match='no fallback configured'):
             client.send_message('Hi')
 
         assert mock_api.messages.create.call_count == 3  # initial + 2 retries
@@ -131,8 +132,9 @@ class TestClaudeClientToolsRetry:
         mock_sleep.assert_called_once()
 
     @patch('agent.claude_client.time.sleep')
-    def test_raises_after_max_retries_with_tools(self, mock_sleep):
+    def test_raises_after_max_retries_with_tools_no_fallback(self, mock_sleep):
         client, mock_api = _make_client()
+        client._fallback_config = {}  # no fallback
         from anthropic import RateLimitError
 
         error_response = MagicMock(status_code=429)
@@ -145,7 +147,7 @@ class TestClaudeClientToolsRetry:
 
         import pytest
 
-        with pytest.raises(Exception, match='rate limit exceeded'):
+        with pytest.raises(Exception, match='no fallback configured'):
             client.send_messages_with_tools(
                 messages=[{'role': 'user', 'content': 'test'}],
                 tools=[],
@@ -171,3 +173,143 @@ class TestClaudeClientToolsRetry:
 
         with pytest.raises(Exception, match='Failed to create message'):
             client.send_message('test')
+
+
+class TestClaudeClientFallback:
+    """Tests for Gemini fallback on Claude API errors."""
+
+    @patch('agent.claude_client.time.sleep')
+    def test_falls_back_on_connection_error(self, mock_sleep):
+        client, mock_api = _make_client()
+        from anthropic import APIConnectionError
+
+        mock_api.messages.create.side_effect = APIConnectionError(request=MagicMock())
+
+        with patch.object(client, '_get_fallback_client') as mock_fb:
+            mock_gemini = MagicMock()
+            mock_gemini.send_message.return_value = 'Gemini response'
+            mock_fb.return_value = mock_gemini
+
+            result = client.send_message('Hi')
+            assert result == 'Gemini response'
+            mock_gemini.send_message.assert_called_once_with('Hi')
+
+    @patch('agent.claude_client.time.sleep')
+    def test_falls_back_on_auth_error(self, mock_sleep):
+        client, mock_api = _make_client()
+        from anthropic import AuthenticationError
+
+        error_response = MagicMock(status_code=401)
+        error_response.headers = {}
+        auth_error = AuthenticationError.__new__(AuthenticationError)
+        auth_error.response = error_response
+        auth_error.message = 'invalid key'
+        mock_api.messages.create.side_effect = auth_error
+
+        with patch.object(client, '_get_fallback_client') as mock_fb:
+            mock_gemini = MagicMock()
+            mock_gemini.send_message.return_value = 'Gemini fallback'
+            mock_fb.return_value = mock_gemini
+
+            result = client.send_message('Hi')
+            assert result == 'Gemini fallback'
+
+    @patch('agent.claude_client.time.sleep')
+    def test_falls_back_on_internal_server_error(self, mock_sleep):
+        client, mock_api = _make_client()
+        from anthropic import InternalServerError
+
+        error_response = MagicMock(status_code=500)
+        error_response.headers = {}
+        server_error = InternalServerError.__new__(InternalServerError)
+        server_error.response = error_response
+        server_error.message = 'internal error'
+        mock_api.messages.create.side_effect = server_error
+
+        with patch.object(client, '_get_fallback_client') as mock_fb:
+            mock_gemini = MagicMock()
+            mock_gemini.send_message.return_value = 'Gemini 500 fallback'
+            mock_fb.return_value = mock_gemini
+
+            result = client.send_message('Hi')
+            assert result == 'Gemini 500 fallback'
+
+    @patch('agent.claude_client.time.sleep')
+    def test_falls_back_with_tools_on_connection_error(self, mock_sleep):
+        client, mock_api = _make_client()
+        from anthropic import APIConnectionError
+
+        mock_api.messages.create.side_effect = APIConnectionError(request=MagicMock())
+
+        with patch.object(client, '_get_fallback_client') as mock_fb:
+            mock_gemini = MagicMock()
+            mock_gemini.send_messages_with_tools.return_value = MagicMock()
+            mock_fb.return_value = mock_gemini
+
+            client.send_messages_with_tools(
+                messages=[{'role': 'user', 'content': 'test'}],
+                tools=[],
+            )
+            mock_gemini.send_messages_with_tools.assert_called_once()
+
+    @patch('agent.claude_client.time.sleep')
+    def test_rate_limit_exhaustion_triggers_fallback(self, mock_sleep):
+        client, mock_api = _make_client()
+        from anthropic import RateLimitError
+
+        error_response = MagicMock(status_code=429)
+        error_response.headers = {}
+        rate_error = RateLimitError.__new__(RateLimitError)
+        rate_error.response = error_response
+        rate_error.message = 'rate limited'
+        mock_api.messages.create.side_effect = rate_error
+
+        with patch.object(client, '_get_fallback_client') as mock_fb:
+            mock_gemini = MagicMock()
+            mock_gemini.send_message.return_value = 'Gemini after rate limit'
+            mock_fb.return_value = mock_gemini
+
+            result = client.send_message('Hi')
+            assert result == 'Gemini after rate limit'
+            # Should have retried first
+            assert mock_api.messages.create.call_count == 3  # initial + 2 retries
+
+    def test_raises_when_no_fallback_configured(self):
+        client, mock_api = _make_client()
+        client._fallback_config = {}
+        from anthropic import APIConnectionError
+
+        mock_api.messages.create.side_effect = APIConnectionError(request=MagicMock())
+
+        import pytest
+
+        with pytest.raises(Exception, match='no fallback configured'):
+            client.send_message('Hi')
+
+    def test_raises_when_no_fallback_configured_with_tools(self):
+        client, mock_api = _make_client()
+        client._fallback_config = {}
+        from anthropic import APIConnectionError
+
+        mock_api.messages.create.side_effect = APIConnectionError(request=MagicMock())
+
+        import pytest
+
+        with pytest.raises(Exception, match='no fallback configured'):
+            client.send_messages_with_tools(
+                messages=[{'role': 'user', 'content': 'test'}],
+                tools=[],
+            )
+
+    def test_get_fallback_client_returns_none_when_not_configured(self):
+        client, _ = _make_client()
+        client._fallback_config = {}
+        assert client._get_fallback_client() is None
+
+    @patch('agent.gemini_client.genai.Client')
+    def test_get_fallback_client_returns_gemini(self, mock_genai):
+        client, _ = _make_client()
+        client._fallback_config = {'provider': 'gemini', 'model': 'gemini-2.5-flash'}
+        fb = client._get_fallback_client()
+        assert fb is not None
+        assert fb.model == 'gemini-2.5-flash'
