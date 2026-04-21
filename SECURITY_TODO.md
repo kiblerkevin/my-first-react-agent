@@ -57,7 +57,7 @@
 
 **Tests:** Verify round-trip encrypt/decrypt, verify encrypted value differs from plaintext, verify migration of unencrypted tokens.
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 
 ---
 

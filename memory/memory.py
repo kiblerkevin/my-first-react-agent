@@ -301,18 +301,21 @@ class Memory:
     def save_oauth_token(
         self, service: str, access_token: str, blog_id: str = None, blog_url: str = None
     ):
-        """Save an OAuth token for a service."""
+        """Save an OAuth token for a service, encrypted at rest."""
+        from utils.encryption import encrypt_token
+
+        encrypted = encrypt_token(access_token)
         session = get_session(self.engine)
         try:
             token = session.query(OAuthToken).filter_by(service=service).first()
             if token:
-                token.access_token = access_token
+                token.access_token = encrypted
                 token.blog_id = blog_id
                 token.blog_url = blog_url
             else:
                 token = OAuthToken(
                     service=service,
-                    access_token=access_token,
+                    access_token=encrypted,
                     blog_id=blog_id,
                     blog_url=blog_url,
                 )
@@ -323,11 +326,23 @@ class Memory:
             session.close()
 
     def get_oauth_token(self, service: str) -> str | None:
-        """Get the OAuth token for a service."""
+        """Get the OAuth token for a service, decrypting and auto-migrating if needed."""
+        from utils.encryption import decrypt_token, is_encrypted
+
         session = get_session(self.engine)
         try:
             token = session.query(OAuthToken).filter_by(service=service).first()
-            return token.access_token if token else None
+            if not token:
+                return None
+            plaintext = decrypt_token(token.access_token)
+            # Auto-migrate: if stored value was plaintext, encrypt it in place
+            if not is_encrypted(token.access_token):
+                from utils.encryption import encrypt_token
+
+                token.access_token = encrypt_token(plaintext)
+                session.commit()
+                logger.info(f'Auto-migrated plaintext OAuth token for {service}')
+            return plaintext
         finally:
             session.close()
 

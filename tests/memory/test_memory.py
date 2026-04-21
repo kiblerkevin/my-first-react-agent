@@ -808,3 +808,43 @@ class TestFilePermissions:
         assert result is not None
         mode = os.stat(result).st_mode & 0o777
         assert mode == 0o600
+
+
+class TestOAuthTokenEncryption:
+    """Tests for OAuth token encryption at rest."""
+
+    def test_saved_token_is_encrypted_in_db(self, memory):
+        from memory.database import OAuthToken, get_session
+
+        memory.save_oauth_token('test_svc', 'plaintext_token')
+
+        session = get_session(memory.engine)
+        row = session.query(OAuthToken).filter_by(service='test_svc').first()
+        session.close()
+
+        # Raw DB value should be encrypted, not plaintext
+        assert row.access_token.startswith('enc:')
+        assert 'plaintext_token' not in row.access_token
+
+    def test_get_token_returns_decrypted(self, memory):
+        memory.save_oauth_token('test_svc', 'my_secret_token')
+        assert memory.get_oauth_token('test_svc') == 'my_secret_token'
+
+    def test_auto_migrates_plaintext_token(self, memory):
+        from memory.database import OAuthToken, get_session
+
+        # Manually insert a plaintext token (simulating pre-encryption data)
+        session = get_session(memory.engine)
+        session.add(OAuthToken(service='legacy', access_token='old_plaintext'))
+        session.commit()
+        session.close()
+
+        # get_oauth_token should return plaintext and auto-encrypt in DB
+        result = memory.get_oauth_token('legacy')
+        assert result == 'old_plaintext'
+
+        # Verify it's now encrypted in the DB
+        session = get_session(memory.engine)
+        row = session.query(OAuthToken).filter_by(service='legacy').first()
+        session.close()
+        assert row.access_token.startswith('enc:')

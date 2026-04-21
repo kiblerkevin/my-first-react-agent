@@ -280,6 +280,7 @@ def tmp_db(tmp_path):
 def memory(tmp_db, monkeypatch):
     """Memory instance pointed at the temp database."""
     monkeypatch.setattr('memory.memory.DATABASE_CONFIG_PATH', '__nonexistent__')
+    monkeypatch.setenv('APPROVAL_SECRET_KEY', 'test-secret-key-for-tests')
 
     class _TestMemory(Memory):
         def __init__(self, db_path):
