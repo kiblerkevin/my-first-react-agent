@@ -1037,8 +1037,6 @@ class Memory:
 
     def get_drift_metrics(self, window: int = 10) -> dict:
         """Get all data needed for drift detection in one query batch."""
-        import json as _json
-
         session = get_session(self.engine)
         try:
             runs = (

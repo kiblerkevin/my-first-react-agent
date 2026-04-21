@@ -91,7 +91,7 @@ def _set_security_headers(response: Any) -> Any:
 WP_CLIENT_ID = get_secret('WORDPRESS_CLIENT_ID')
 WP_CLIENT_SECRET = get_secret('WORDPRESS_CLIENT_SECRET')
 WP_REDIRECT_URI = (
-    get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000' + '/oauth/callback'
+    (get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000') + '/oauth/callback'
 )
 WP_AUTHORIZE_URL = 'https://public-api.wordpress.com/oauth2/authorize'
 WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'

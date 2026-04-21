@@ -7,7 +7,7 @@ rate_limiting:
 
 # Auth0 configuration
 auth0:
-  domain: "your-tenant.auth0.com"
+  domain: "dev-xxh01tebrt5zvws4.us.auth0.com"
   client_id_key: "AUTH0_CLIENT_ID"  # key name in secrets provider
   client_secret_key: "AUTH0_CLIENT_SECRET"  # key name in secrets provider
   audience: "https://chicago-sports-recap/api"
@@ -17,6 +17,8 @@ auth0:
 role_mappings:
   # admin@example.com: admin
   # editor@example.com: editor
+  kjkibler13@gmail.com: admin
+  contact.chicagosportsrecap@gmail.com: admin
 
 # Role route permissions
 roles:
