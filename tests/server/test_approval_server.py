@@ -57,3 +57,47 @@ def test_oauth_error_does_not_leak_internals(mock_memory_cls):
             assert response.status_code == 500
             assert b'secret_path' not in response.data
             assert b'internal error' in response.data.lower()
+
+
+@patch('server.approval_server.Memory')
+def test_post_info_strips_malicious_html(mock_memory_cls):
+    """XSS: malicious HTML in post_info is stripped by bleach."""
+    import bleach
+
+    malicious = '<script>alert("xss")</script><p>Safe content</p>'
+    sanitized = bleach.clean(
+        malicious,
+        tags=['p', 'a', 'strong'],
+        attributes={'a': ['href']},
+    )
+    assert '<script>' not in sanitized
+    assert '<p>Safe content</p>' in sanitized
+
+
+@patch('server.approval_server.Memory')
+def test_post_info_allows_safe_tags(mock_memory_cls):
+    """XSS: safe tags (p, a, strong) pass through bleach."""
+    import bleach
+
+    safe = '<p><strong>Published:</strong> <a href="http://x.com">Link</a></p>'
+    sanitized = bleach.clean(
+        safe,
+        tags=['p', 'a', 'strong'],
+        attributes={'a': ['href']},
+    )
+    assert sanitized == safe
+
+
+@patch('server.approval_server.Memory')
+def test_post_info_strips_style_attributes(mock_memory_cls):
+    """XSS: style attributes are stripped from allowed tags."""
+    import bleach
+
+    styled = "<p style='color: red;'>Text</p>"
+    sanitized = bleach.clean(
+        styled,
+        tags=['p', 'a', 'strong'],
+        attributes={'a': ['href']},
+    )
+    assert 'style=' not in sanitized
+    assert '<p>' in sanitized

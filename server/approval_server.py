@@ -6,6 +6,7 @@ import sys
 import time
 from typing import Any
 
+import bleach
 import yaml
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -280,7 +281,15 @@ def approve(token: str) -> Any:
             f'{publish_result.error}</p>'
         )
 
-    return render_template_string(APPROVED_PAGE, title=title, post_info=post_info)
+    return render_template_string(
+        APPROVED_PAGE,
+        title=title,
+        post_info=bleach.clean(
+            post_info,
+            tags=['p', 'a', 'strong'],
+            attributes={'a': ['href']},
+        ),
+    )
 
 
 @app.route('/reject/<token>', methods=['GET', 'POST'])
