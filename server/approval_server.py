@@ -10,6 +10,8 @@ import bleach
 import yaml
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template_string, request
@@ -37,6 +39,22 @@ memory = Memory()
 from flask_wtf.csrf import CSRFProtect
 
 csrf = CSRFProtect(app)
+
+# Rate limiting
+AUTH_CONFIG_PATH = 'config/auth.yaml'
+with open(AUTH_CONFIG_PATH, 'r') as _af:
+    _auth_config = yaml.safe_load(_af)
+_rl_config = _auth_config.get('rate_limiting', {})
+_rl_storage = _rl_config.get('storage', 'memory')
+_rl_storage_uri = 'memory://' if _rl_storage == 'memory' else _rl_storage
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[_rl_config.get('default', '60/minute')],
+    storage_uri=_rl_storage_uri,
+)
+limiter.limit(_rl_config.get('dashboard_api', '30/minute'))(dashboard_bp)
 
 # Approval token validation
 with open(ORCHESTRATION_CONFIG_PATH, 'r') as _f:
@@ -147,6 +165,7 @@ OAUTH_ERROR_PAGE = """
 
 
 @app.route('/health')
+@limiter.exempt
 def health() -> Any:
     """Return service health status."""
     return jsonify({'status': 'ok'})
@@ -224,6 +243,7 @@ def oauth_callback() -> Any:
 
 
 @app.route('/approve/<token>')
+@limiter.limit(_rl_config.get('approval_endpoints', '10/minute'))
 def approve(token: str) -> Any:
     """Approve a blog post and trigger WordPress publish."""
     try:
@@ -314,6 +334,7 @@ def approve(token: str) -> Any:
 
 
 @app.route('/reject/<token>', methods=['GET', 'POST'])
+@limiter.limit(_rl_config.get('approval_endpoints', '10/minute'))
 def reject(token: str) -> Any:
     """Show rejection form (GET) or process rejection with feedback (POST)."""
     try:

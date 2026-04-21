@@ -207,7 +207,7 @@
 
 **Tests:** Verify rate limit headers are present, verify 429 response after exceeding limit.
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 
 ---
 

@@ -1,0 +1,6 @@
+# Rate limiting configuration
+rate_limiting:
+  storage: "memory"  # "memory" for local, "redis://host:port" for distributed
+  default: "60/minute"
+  approval_endpoints: "10/minute"
+  dashboard_api: "30/minute"

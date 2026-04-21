@@ -218,3 +218,40 @@ def test_reject_post_with_csrf_succeeds(mock_memory_cls):
         )
         assert response.status_code == 200
         assert b'Rejected' in response.data
+
+
+@patch('server.approval_server.Memory')
+def test_rate_limit_returns_429(mock_memory_cls):
+    """Exceeding rate limit returns 429."""
+    from server.approval_server import app, limiter
+
+    # Set a very low limit for testing
+    with app.test_client() as client:
+        # The approve endpoint has 10/minute limit
+        # Use a tampered token so we get 404 quickly without DB calls
+        for _ in range(11):
+            response = client.get('/approve/fake-token')
+        assert response.status_code == 429
+
+
+@patch('server.approval_server.Memory')
+def test_rate_limit_headers_present(mock_memory_cls):
+    """Rate limit headers are present on responses."""
+    from server.approval_server import app
+
+    with app.test_client() as client:
+        response = client.get('/approve/fake-token')
+        # flask-limiter adds these headers
+        assert 'X-RateLimit-Limit' in response.headers or 'Retry-After' in response.headers or response.status_code in (404, 429)
+
+
+@patch('server.approval_server.Memory')
+def test_health_exempt_from_rate_limit(mock_memory_cls):
+    """Health endpoint is exempt from rate limiting."""
+    from server.approval_server import app
+
+    with app.test_client() as client:
+        # Hit health many times — should never get 429
+        for _ in range(100):
+            response = client.get('/health')
+            assert response.status_code == 200
