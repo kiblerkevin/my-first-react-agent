@@ -14,11 +14,24 @@ class TestFetchArticlesTool:
     @patch('builtins.open')
     @patch('tools.fetch_articles_tool.SerpApiCollector')
     @patch('tools.fetch_articles_tool.NewsAPI_Collector')
-    def test_deduplicates_across_sources(self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls, mock_articles):
+    def test_deduplicates_across_sources(
+        self,
+        mock_news_cls,
+        mock_serp_cls,
+        mock_open,
+        mock_yaml,
+        mock_memory_cls,
+        mock_articles,
+    ):
         mock_yaml.return_value = {
             'collection': {'max_articles_per_source': 100},
             'relevance_scoring': {
-                'weights': {'recency': 0.25, 'source_credibility': 0.25, 'team_keyword_density': 0.25, 'content_signals': 0.25},
+                'weights': {
+                    'recency': 0.25,
+                    'source_credibility': 0.25,
+                    'team_keyword_density': 0.25,
+                    'content_signals': 0.25,
+                },
                 'credible_sources': ['ESPN'],
                 'content_signal_keywords': ['trade'],
             },
@@ -26,7 +39,9 @@ class TestFetchArticlesTool:
         # Both sources return the same article
         shared_article = mock_articles[0].copy()
         mock_news_cls.return_value.collect_articles.return_value = [shared_article]
-        mock_serp_cls.return_value.collect_articles.return_value = [shared_article.copy()]
+        mock_serp_cls.return_value.collect_articles.return_value = [
+            shared_article.copy()
+        ]
         mock_memory = MagicMock()
         mock_memory.get_seen_urls.return_value = set()
         mock_memory_cls.return_value = mock_memory
@@ -41,11 +56,24 @@ class TestFetchArticlesTool:
     @patch('builtins.open')
     @patch('tools.fetch_articles_tool.SerpApiCollector')
     @patch('tools.fetch_articles_tool.NewsAPI_Collector')
-    def test_memory_filter_excludes_seen_urls(self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls, mock_articles):
+    def test_memory_filter_excludes_seen_urls(
+        self,
+        mock_news_cls,
+        mock_serp_cls,
+        mock_open,
+        mock_yaml,
+        mock_memory_cls,
+        mock_articles,
+    ):
         mock_yaml.return_value = {
             'collection': {'max_articles_per_source': 100},
             'relevance_scoring': {
-                'weights': {'recency': 0.25, 'source_credibility': 0.25, 'team_keyword_density': 0.25, 'content_signals': 0.25},
+                'weights': {
+                    'recency': 0.25,
+                    'source_credibility': 0.25,
+                    'team_keyword_density': 0.25,
+                    'content_signals': 0.25,
+                },
                 'credible_sources': [],
                 'content_signal_keywords': [],
             },
@@ -67,11 +95,24 @@ class TestFetchArticlesTool:
     @patch('builtins.open')
     @patch('tools.fetch_articles_tool.SerpApiCollector')
     @patch('tools.fetch_articles_tool.NewsAPI_Collector')
-    def test_force_refresh_skips_memory_filter(self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls, mock_articles):
+    def test_force_refresh_skips_memory_filter(
+        self,
+        mock_news_cls,
+        mock_serp_cls,
+        mock_open,
+        mock_yaml,
+        mock_memory_cls,
+        mock_articles,
+    ):
         mock_yaml.return_value = {
             'collection': {'max_articles_per_source': 100},
             'relevance_scoring': {
-                'weights': {'recency': 0.25, 'source_credibility': 0.25, 'team_keyword_density': 0.25, 'content_signals': 0.25},
+                'weights': {
+                    'recency': 0.25,
+                    'source_credibility': 0.25,
+                    'team_keyword_density': 0.25,
+                    'content_signals': 0.25,
+                },
                 'credible_sources': [],
                 'content_signal_keywords': [],
             },
@@ -97,16 +138,25 @@ class TestFetchArticlesToolErrorPaths:
     @patch('builtins.open')
     @patch('tools.fetch_articles_tool.SerpApiCollector')
     @patch('tools.fetch_articles_tool.NewsAPI_Collector')
-    def test_captures_collector_errors(self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls):
+    def test_captures_collector_errors(
+        self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls
+    ):
         mock_yaml.return_value = {
             'collection': {'max_articles_per_source': 100},
             'relevance_scoring': {
-                'weights': {'recency': 0.25, 'source_credibility': 0.25, 'team_keyword_density': 0.25, 'content_signals': 0.25},
+                'weights': {
+                    'recency': 0.25,
+                    'source_credibility': 0.25,
+                    'team_keyword_density': 0.25,
+                    'content_signals': 0.25,
+                },
                 'credible_sources': [],
                 'content_signal_keywords': [],
             },
         }
-        mock_news_cls.return_value.collect_articles.side_effect = Exception('NewsAPI down')
+        mock_news_cls.return_value.collect_articles.side_effect = Exception(
+            'NewsAPI down'
+        )
         mock_serp_cls.return_value.collect_articles.return_value = []
         mock_memory = MagicMock()
         mock_memory.get_seen_urls.return_value = set()
@@ -123,11 +173,18 @@ class TestFetchArticlesToolErrorPaths:
     @patch('builtins.open')
     @patch('tools.fetch_articles_tool.SerpApiCollector')
     @patch('tools.fetch_articles_tool.NewsAPI_Collector')
-    def test_persists_error_api_call_result(self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls):
+    def test_persists_error_api_call_result(
+        self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls
+    ):
         mock_yaml.return_value = {
             'collection': {'max_articles_per_source': 100},
             'relevance_scoring': {
-                'weights': {'recency': 0.25, 'source_credibility': 0.25, 'team_keyword_density': 0.25, 'content_signals': 0.25},
+                'weights': {
+                    'recency': 0.25,
+                    'source_credibility': 0.25,
+                    'team_keyword_density': 0.25,
+                    'content_signals': 0.25,
+                },
                 'credible_sources': [],
                 'content_signal_keywords': [],
             },
@@ -142,18 +199,27 @@ class TestFetchArticlesToolErrorPaths:
         tool = FetchArticlesTool()
         tool.execute(FetchArticlesInput(run_id='test-run'))
 
-        mock_memory.save_api_call_result.assert_any_call(7, 'newsapi', 'error', error='fail')
+        mock_memory.save_api_call_result.assert_any_call(
+            7, 'newsapi', 'error', error='fail'
+        )
 
     @patch('tools.fetch_articles_tool.Memory')
     @patch('tools.fetch_articles_tool.yaml.safe_load')
     @patch('builtins.open')
     @patch('tools.fetch_articles_tool.SerpApiCollector')
     @patch('tools.fetch_articles_tool.NewsAPI_Collector')
-    def test_recency_score_handles_bad_date(self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls):
+    def test_recency_score_handles_bad_date(
+        self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls
+    ):
         mock_yaml.return_value = {
             'collection': {'max_articles_per_source': 100},
             'relevance_scoring': {
-                'weights': {'recency': 1.0, 'source_credibility': 0, 'team_keyword_density': 0, 'content_signals': 0},
+                'weights': {
+                    'recency': 1.0,
+                    'source_credibility': 0,
+                    'team_keyword_density': 0,
+                    'content_signals': 0,
+                },
                 'credible_sources': [],
                 'content_signal_keywords': [],
             },
@@ -171,11 +237,18 @@ class TestFetchArticlesToolErrorPaths:
     @patch('builtins.open')
     @patch('tools.fetch_articles_tool.SerpApiCollector')
     @patch('tools.fetch_articles_tool.NewsAPI_Collector')
-    def test_keyword_density_empty_inputs(self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls):
+    def test_keyword_density_empty_inputs(
+        self, mock_news_cls, mock_serp_cls, mock_open, mock_yaml, mock_memory_cls
+    ):
         mock_yaml.return_value = {
             'collection': {'max_articles_per_source': 100},
             'relevance_scoring': {
-                'weights': {'recency': 0.25, 'source_credibility': 0.25, 'team_keyword_density': 0.25, 'content_signals': 0.25},
+                'weights': {
+                    'recency': 0.25,
+                    'source_credibility': 0.25,
+                    'team_keyword_density': 0.25,
+                    'content_signals': 0.25,
+                },
                 'credible_sources': [],
                 'content_signal_keywords': [],
             },

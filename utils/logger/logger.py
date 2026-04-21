@@ -136,9 +136,7 @@ def setup_logger(
     if log_level is not None:
         effective_level = log_level
     elif is_project:
-        effective_level = os.getenv(
-            'LOG_LEVEL', config.get('default_level', 'INFO')
-        )
+        effective_level = os.getenv('LOG_LEVEL', config.get('default_level', 'INFO'))
     else:
         effective_level = config.get('third_party_level', 'WARNING')
     logger.setLevel(getattr(logging, effective_level.upper()))
@@ -154,7 +152,7 @@ def setup_logger(
 
     # File handler — JSON, rotating
     os.makedirs('logs', exist_ok=True)
-    log_file = f"logs/app_{datetime.now().strftime('%Y%m%d')}.log"
+    log_file = f'logs/app_{datetime.now().strftime("%Y%m%d")}.log'
     file_handler = RotatingFileHandler(
         log_file,
         maxBytes=config.get('max_file_bytes', 10_485_760),

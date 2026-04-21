@@ -9,17 +9,61 @@ def _make_detector(memory=None):
     """Create a DriftDetector with mocked config and optional memory."""
     config = {
         'metrics': {
-            'average_overall_score': {'threshold': 7.0, 'comparison': 'below', 'window': 5, 'description': 'Avg score', 'suggested_actions': ['Fix prompts']},
-            'consecutive_failures': {'threshold': 3, 'comparison': 'at_or_above', 'window': 10, 'description': 'Failures', 'suggested_actions': ['Check APIs']},
-            'average_revision_tool_calls': {'threshold': 5, 'comparison': 'above', 'window': 5, 'description': 'Avg tool calls', 'suggested_actions': ['Lower floors']},
-            'consecutive_low_completeness': {'threshold': 6.0, 'comparison': 'below', 'window': 3, 'description': 'Low completeness', 'suggested_actions': ['Check ESPN']},
-            'consecutive_low_accuracy': {'threshold': 7.0, 'comparison': 'below', 'window': 2, 'description': 'Low accuracy', 'suggested_actions': ['Verify scores']},
-            'approval_rejection_rate': {'threshold': 50, 'comparison': 'above', 'window': 7, 'description': 'Rejection rate', 'suggested_actions': ['Review feedback']},
-            'consecutive_no_news_skips': {'threshold': 3, 'comparison': 'at_or_above', 'window': 10, 'description': 'No-news skips', 'suggested_actions': ['Check APIs']},
+            'average_overall_score': {
+                'threshold': 7.0,
+                'comparison': 'below',
+                'window': 5,
+                'description': 'Avg score',
+                'suggested_actions': ['Fix prompts'],
+            },
+            'consecutive_failures': {
+                'threshold': 3,
+                'comparison': 'at_or_above',
+                'window': 10,
+                'description': 'Failures',
+                'suggested_actions': ['Check APIs'],
+            },
+            'average_revision_tool_calls': {
+                'threshold': 5,
+                'comparison': 'above',
+                'window': 5,
+                'description': 'Avg tool calls',
+                'suggested_actions': ['Lower floors'],
+            },
+            'consecutive_low_completeness': {
+                'threshold': 6.0,
+                'comparison': 'below',
+                'window': 3,
+                'description': 'Low completeness',
+                'suggested_actions': ['Check ESPN'],
+            },
+            'consecutive_low_accuracy': {
+                'threshold': 7.0,
+                'comparison': 'below',
+                'window': 2,
+                'description': 'Low accuracy',
+                'suggested_actions': ['Verify scores'],
+            },
+            'approval_rejection_rate': {
+                'threshold': 50,
+                'comparison': 'above',
+                'window': 7,
+                'description': 'Rejection rate',
+                'suggested_actions': ['Review feedback'],
+            },
+            'consecutive_no_news_skips': {
+                'threshold': 3,
+                'comparison': 'at_or_above',
+                'window': 10,
+                'description': 'No-news skips',
+                'suggested_actions': ['Check APIs'],
+            },
         }
     }
-    with patch('utils.drift_detector.yaml.safe_load', return_value=config), \
-         patch('builtins.open'):
+    with (
+        patch('utils.drift_detector.yaml.safe_load', return_value=config),
+        patch('builtins.open'),
+    ):
         detector = DriftDetector(memory=memory or MagicMock())
     return detector
 
@@ -56,7 +100,12 @@ class TestDriftDetectorEvaluation:
 
     def test_consecutive_failures_breaching(self):
         detector = _make_detector()
-        runs = [{'status': 'failed'}, {'status': 'failed'}, {'status': 'failed'}, {'status': 'success'}]
+        runs = [
+            {'status': 'failed'},
+            {'status': 'failed'},
+            {'status': 'failed'},
+            {'status': 'success'},
+        ]
         result = detector._eval_consecutive_failures(runs)
         assert result['breaching'] is True
         assert result['value'] == 3
@@ -124,7 +173,10 @@ class TestDriftDetectorEvaluation:
 
     def test_consecutive_no_news_skips_healthy(self):
         detector = _make_detector()
-        runs = [{'status': 'success', 'skip_reason': None}, {'status': 'skipped', 'skip_reason': 'No new articles found.'}]
+        runs = [
+            {'status': 'success', 'skip_reason': None},
+            {'status': 'skipped', 'skip_reason': 'No new articles found.'},
+        ]
         result = detector._eval_consecutive_no_news_skips(runs)
         assert result['breaching'] is False
         assert result['value'] == 0
@@ -148,7 +200,15 @@ class TestDriftDetectorCheck:
     def test_creates_alert_on_new_breach(self):
         memory = MagicMock()
         memory.get_drift_metrics.return_value = {
-            'runs': [{'status': 'failed', 'overall_score': None, 'revision_tool_calls': None, 'skip_reason': None}] * 5,
+            'runs': [
+                {
+                    'status': 'failed',
+                    'overall_score': None,
+                    'revision_tool_calls': None,
+                    'skip_reason': None,
+                }
+            ]
+            * 5,
             'approvals': [],
         }
         memory.has_active_alert.return_value = False
@@ -162,7 +222,15 @@ class TestDriftDetectorCheck:
     def test_suppresses_duplicate_alert(self):
         memory = MagicMock()
         memory.get_drift_metrics.return_value = {
-            'runs': [{'status': 'failed', 'overall_score': None, 'revision_tool_calls': None, 'skip_reason': None}] * 5,
+            'runs': [
+                {
+                    'status': 'failed',
+                    'overall_score': None,
+                    'revision_tool_calls': None,
+                    'skip_reason': None,
+                }
+            ]
+            * 5,
             'approvals': [],
         }
         memory.has_active_alert.return_value = True  # already alerted
@@ -176,7 +244,15 @@ class TestDriftDetectorCheck:
     def test_resolves_alert_on_recovery(self):
         memory = MagicMock()
         memory.get_drift_metrics.return_value = {
-            'runs': [{'status': 'success', 'overall_score': 9.0, 'revision_tool_calls': 3, 'skip_reason': None}] * 5,
+            'runs': [
+                {
+                    'status': 'success',
+                    'overall_score': 9.0,
+                    'revision_tool_calls': 3,
+                    'skip_reason': None,
+                }
+            ]
+            * 5,
             'approvals': [{'status': 'approved'}] * 7,
         }
         # All metrics healthy, but has active alerts
@@ -191,7 +267,15 @@ class TestDriftDetectorCheck:
     def test_no_alerts_when_all_healthy(self):
         memory = MagicMock()
         memory.get_drift_metrics.return_value = {
-            'runs': [{'status': 'success', 'overall_score': 9.0, 'revision_tool_calls': 3, 'skip_reason': None}] * 5,
+            'runs': [
+                {
+                    'status': 'success',
+                    'overall_score': 9.0,
+                    'revision_tool_calls': 3,
+                    'skip_reason': None,
+                }
+            ]
+            * 5,
             'approvals': [{'status': 'approved'}] * 7,
         }
         memory.has_active_alert.return_value = False

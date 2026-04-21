@@ -448,7 +448,7 @@ def send_drift_recovery_email(recoveries: list[dict]) -> None:
     error_email_to = os.getenv('ERROR_EMAIL_TO', os.getenv('EMAIL_TO'))
 
     rows_html = ''.join(
-        f"<tr><td><strong>{r['metric_name']}</strong></td><td>{r['description']}</td><td>{r['value']}</td></tr>"
+        f'<tr><td><strong>{r["metric_name"]}</strong></td><td>{r["description"]}</td><td>{r["value"]}</td></tr>'
         for r in recoveries
     )
     metric_names = ', '.join(r['metric_name'] for r in recoveries)

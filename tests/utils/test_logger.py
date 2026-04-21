@@ -2,7 +2,7 @@
 
 import json
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from utils.logger.logger import (
     _ConsoleFormatter,
@@ -60,7 +60,9 @@ class TestJsonFormatter:
 
     def test_formats_as_json(self):
         formatter = _JsonFormatter()
-        record = logging.LogRecord('mymodule', logging.WARNING, 'file.py', 42, 'test message', (), None)
+        record = logging.LogRecord(
+            'mymodule', logging.WARNING, 'file.py', 42, 'test message', (), None
+        )
         record.run_id = 'json-test'  # type: ignore[attr-defined]
         output = formatter.format(record)
         parsed = json.loads(output)
@@ -77,7 +79,10 @@ class TestJsonFormatter:
             raise ValueError('boom')
         except ValueError:
             import sys
-            record = logging.LogRecord('mod', logging.ERROR, '', 0, 'err', (), sys.exc_info())
+
+            record = logging.LogRecord(
+                'mod', logging.ERROR, '', 0, 'err', (), sys.exc_info()
+            )
             record.run_id = None  # type: ignore[attr-defined]
             output = formatter.format(record)
             parsed = json.loads(output)
@@ -156,8 +161,15 @@ class TestLoadConfig:
         logger_module._config_loaded = False
 
         try:
-            with patch('builtins.open'), \
-                 patch('yaml.safe_load', return_value={'logging': {'retention_days': 7, 'default_level': 'DEBUG'}}):
+            with (
+                patch('builtins.open'),
+                patch(
+                    'yaml.safe_load',
+                    return_value={
+                        'logging': {'retention_days': 7, 'default_level': 'DEBUG'}
+                    },
+                ),
+            ):
                 config = _load_config()
                 assert config['retention_days'] == 7
                 assert config['default_level'] == 'DEBUG'
@@ -189,8 +201,12 @@ class TestLoadConfig:
         logger_module._config_loaded = False
 
         try:
-            with patch('builtins.open'), \
-                 patch('yaml.safe_load', return_value={'logging': {'retention_days': 99}}) as mock_yaml:
+            with (
+                patch('builtins.open'),
+                patch(
+                    'yaml.safe_load', return_value={'logging': {'retention_days': 99}}
+                ) as mock_yaml,
+            ):
                 _load_config()
                 _load_config()
                 # yaml.safe_load should only be called once

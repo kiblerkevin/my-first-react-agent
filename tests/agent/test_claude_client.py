@@ -66,6 +66,7 @@ class TestClaudeClientSendMessage:
         mock_api.messages.create.side_effect = rate_error
 
         import pytest
+
         with pytest.raises(Exception, match='rate limit exceeded'):
             client.send_message('Hi')
 
@@ -143,6 +144,7 @@ class TestClaudeClientToolsRetry:
         mock_api.messages.create.side_effect = rate_error
 
         import pytest
+
         with pytest.raises(Exception, match='rate limit exceeded'):
             client.send_messages_with_tools(
                 messages=[{'role': 'user', 'content': 'test'}],
@@ -154,6 +156,7 @@ class TestClaudeClientToolsRetry:
         mock_api.messages.create.side_effect = ValueError('bad input')
 
         import pytest
+
         with pytest.raises(Exception, match='Failed to create message'):
             client.send_messages_with_tools(
                 messages=[{'role': 'user', 'content': 'test'}],
@@ -165,5 +168,6 @@ class TestClaudeClientToolsRetry:
         mock_api.messages.create.side_effect = ValueError('bad input')
 
         import pytest
+
         with pytest.raises(Exception, match='Failed to create message'):
             client.send_message('test')

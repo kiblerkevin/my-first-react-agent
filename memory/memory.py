@@ -1052,9 +1052,7 @@ class Memory:
                     }
                     for r in runs
                 ],
-                'approvals': [
-                    {'status': a.status} for a in approvals
-                ],
+                'approvals': [{'status': a.status} for a in approvals],
             }
         finally:
             session.close()
@@ -1064,9 +1062,7 @@ class Memory:
         session = get_session(self.engine)
         try:
             alerts = (
-                session.query(DriftAlert)
-                .filter(DriftAlert.status == 'active')
-                .all()
+                session.query(DriftAlert).filter(DriftAlert.status == 'active').all()
             )
             return [
                 {
@@ -1083,7 +1079,11 @@ class Memory:
             session.close()
 
     def create_drift_alert(
-        self, metric_name: str, metric_value: float, threshold: float, run_id: str | None = None
+        self,
+        metric_name: str,
+        metric_value: float,
+        threshold: float,
+        run_id: str | None = None,
     ) -> int:
         """Create a new active drift alert."""
         session = get_session(self.engine)
@@ -1098,7 +1098,9 @@ class Memory:
             )
             session.add(alert)
             session.commit()
-            logger.info(f'Drift alert created: {metric_name} (value={metric_value}, threshold={threshold})')
+            logger.info(
+                f'Drift alert created: {metric_name} (value={metric_value}, threshold={threshold})'
+            )
             return alert.id
         finally:
             session.close()
@@ -1109,7 +1111,9 @@ class Memory:
         try:
             alert = (
                 session.query(DriftAlert)
-                .filter(DriftAlert.metric_name == metric_name, DriftAlert.status == 'active')
+                .filter(
+                    DriftAlert.metric_name == metric_name, DriftAlert.status == 'active'
+                )
                 .first()
             )
             if alert:
@@ -1126,7 +1130,9 @@ class Memory:
         try:
             return (
                 session.query(DriftAlert)
-                .filter(DriftAlert.metric_name == metric_name, DriftAlert.status == 'active')
+                .filter(
+                    DriftAlert.metric_name == metric_name, DriftAlert.status == 'active'
+                )
                 .count()
                 > 0
             )

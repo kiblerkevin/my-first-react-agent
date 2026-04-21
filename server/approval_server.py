@@ -10,11 +10,11 @@ import bleach
 import yaml
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template_string, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -247,7 +247,9 @@ def oauth_callback() -> Any:
 def approve(token: str) -> Any:
     """Approve a blog post and trigger WordPress publish."""
     try:
-        _approval_serializer.loads(token, salt='approval', max_age=_approval_expiry_seconds)
+        _approval_serializer.loads(
+            token, salt='approval', max_age=_approval_expiry_seconds
+        )
     except (SignatureExpired, BadSignature):
         return render_template_string(INVALID_TOKEN_PAGE), 404
 
@@ -338,7 +340,9 @@ def approve(token: str) -> Any:
 def reject(token: str) -> Any:
     """Show rejection form (GET) or process rejection with feedback (POST)."""
     try:
-        _approval_serializer.loads(token, salt='approval', max_age=_approval_expiry_seconds)
+        _approval_serializer.loads(
+            token, salt='approval', max_age=_approval_expiry_seconds
+        )
     except (SignatureExpired, BadSignature):
         return render_template_string(INVALID_TOKEN_PAGE), 404
 

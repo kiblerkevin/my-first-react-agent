@@ -7,18 +7,26 @@ from tools.send_approval_email_tool import SendApprovalEmailTool, send_failure_e
 
 
 def _make_tool():
-    with patch('tools.send_approval_email_tool.Memory') as mock_mem_cls, \
-         patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'approval': {'expiry_hours': 24}}), \
-         patch('builtins.open'), \
-         patch.dict('os.environ', {
-             'APPROVAL_SECRET_KEY': 'test-secret-key-1234567890',
-             'APPROVAL_BASE_URL': 'http://localhost:5000',
-             'EMAIL_SMTP_SERVER': 'smtp.test.com',
-             'EMAIL_SMTP_PORT': '587',
-             'EMAIL_FROM': 'test@test.com',
-             'EMAIL_PASSWORD': 'pass',
-             'EMAIL_TO': 'admin@test.com',
-         }):
+    with (
+        patch('tools.send_approval_email_tool.Memory') as mock_mem_cls,
+        patch(
+            'tools.send_approval_email_tool.yaml.safe_load',
+            return_value={'approval': {'expiry_hours': 24}},
+        ),
+        patch('builtins.open'),
+        patch.dict(
+            'os.environ',
+            {
+                'APPROVAL_SECRET_KEY': 'test-secret-key-1234567890',
+                'APPROVAL_BASE_URL': 'http://localhost:5000',
+                'EMAIL_SMTP_SERVER': 'smtp.test.com',
+                'EMAIL_SMTP_PORT': '587',
+                'EMAIL_FROM': 'test@test.com',
+                'EMAIL_PASSWORD': 'pass',
+                'EMAIL_TO': 'admin@test.com',
+            },
+        ),
+    ):
         tool = SendApprovalEmailTool()
         tool.memory = mock_mem_cls.return_value
         return tool
@@ -30,12 +38,20 @@ class TestSendApprovalEmailTool:
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
     def test_sends_email_successfully(self, mock_smtp):
         tool = _make_tool()
-        tool.memory.create_pending_approval.return_value = {'id': 1, 'token': 'x', 'status': 'pending', 'expires_at': '2026-01-01'}
+        tool.memory.create_pending_approval.return_value = {
+            'id': 1,
+            'token': 'x',
+            'status': 'pending',
+            'expires_at': '2026-01-01',
+        }
 
-        result = tool.execute(SendApprovalEmailInput(
-            title='Test Post', content='<p>Content</p>',
-            evaluation_scores={'accuracy': 9.0},
-        ))
+        result = tool.execute(
+            SendApprovalEmailInput(
+                title='Test Post',
+                content='<p>Content</p>',
+                evaluation_scores={'accuracy': 9.0},
+            )
+        )
 
         assert result.email_sent is True
         assert result.token != ''
@@ -45,7 +61,12 @@ class TestSendApprovalEmailTool:
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
     def test_returns_error_on_smtp_failure(self, mock_smtp):
         tool = _make_tool()
-        tool.memory.create_pending_approval.return_value = {'id': 1, 'token': 'x', 'status': 'pending', 'expires_at': '2026-01-01'}
+        tool.memory.create_pending_approval.return_value = {
+            'id': 1,
+            'token': 'x',
+            'status': 'pending',
+            'expires_at': '2026-01-01',
+        }
         mock_smtp.return_value.__enter__ = MagicMock(side_effect=Exception('SMTP down'))
 
         result = tool.execute(SendApprovalEmailInput(title='Test', content='<p>X</p>'))
@@ -57,16 +78,25 @@ class TestSendApprovalEmailTool:
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
     def test_email_contains_approve_reject_links(self, mock_smtp):
         tool = _make_tool()
-        tool.memory.create_pending_approval.return_value = {'id': 1, 'token': 'x', 'status': 'pending', 'expires_at': '2026-01-01'}
+        tool.memory.create_pending_approval.return_value = {
+            'id': 1,
+            'token': 'x',
+            'status': 'pending',
+            'expires_at': '2026-01-01',
+        }
 
-        tool.execute(SendApprovalEmailInput(
-            title='Test Post', content='<p>Content</p>',
-            categories=[{'name': 'Daily Recap'}],
-            tags=[{'name': 'Cubs'}],
-        ))
+        tool.execute(
+            SendApprovalEmailInput(
+                title='Test Post',
+                content='<p>Content</p>',
+                categories=[{'name': 'Daily Recap'}],
+                tags=[{'name': 'Cubs'}],
+            )
+        )
 
         # Verify SMTP was called — decode MIME to check content
         import email
+
         smtp_instance = mock_smtp.return_value.__enter__.return_value
         raw = smtp_instance.sendmail.call_args[0][2]
         msg = email.message_from_string(raw)
@@ -84,15 +114,21 @@ class TestSendFailureEmail:
     """Tests for the standalone send_failure_email function."""
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_sends_failure_email(self, mock_open, mock_yaml, mock_smtp):
         send_failure_email(
             run_id='run-123',
@@ -101,6 +137,7 @@ class TestSendFailureEmail:
         )
 
         import email as email_mod
+
         smtp_instance = mock_smtp.return_value.__enter__.return_value
         smtp_instance.sendmail.assert_called_once()
         raw = smtp_instance.sendmail.call_args[0][2]
@@ -114,7 +151,10 @@ class TestSendFailureEmail:
         assert 'run-123' in html
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': False}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': False}},
+    )
     @patch('builtins.open')
     @patch.dict('os.environ', {'EMAIL_TO': 'x@x.com'})
     def test_skips_when_disabled(self, mock_open, mock_yaml, mock_smtp):
@@ -122,15 +162,21 @@ class TestSendFailureEmail:
         mock_smtp.assert_not_called()
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_identifies_failed_step(self, mock_open, mock_yaml, mock_smtp):
         send_failure_email(
             run_id='run-456',
@@ -139,6 +185,7 @@ class TestSendFailureEmail:
         )
 
         import email as email_mod
+
         raw = mock_smtp.return_value.__enter__.return_value.sendmail.call_args[0][2]
         msg = email_mod.message_from_string(raw)
         html = None
@@ -153,15 +200,21 @@ class TestSendFailureEmailEdgeCases:
     """Tests for send_failure_email edge cases."""
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_includes_context_data(self, mock_open, mock_yaml, mock_smtp):
         send_failure_email(
             run_id='run-ctx',
@@ -171,6 +224,7 @@ class TestSendFailureEmailEdgeCases:
         )
 
         import email as email_mod
+
         raw = mock_smtp.return_value.__enter__.return_value.sendmail.call_args[0][2]
         msg = email_mod.message_from_string(raw)
         html = None
@@ -182,17 +236,25 @@ class TestSendFailureEmailEdgeCases:
         assert 'Partial Data' in html
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_handles_smtp_failure_gracefully(self, mock_open, mock_yaml, mock_smtp):
-        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception('SMTP dead')
+        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception(
+            'SMTP dead'
+        )
 
         # Should not raise
         send_failure_email(run_id='run-fail', error='X', steps_completed=[])
@@ -202,28 +264,37 @@ class TestDriftEmails:
     """Tests for drift alert and recovery email functions."""
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_send_drift_alert_email(self, mock_open, mock_yaml, mock_smtp):
         from tools.send_approval_email_tool import send_drift_alert_email
 
-        alerts = [{
-            'metric_name': 'average_overall_score',
-            'value': 5.5,
-            'threshold': 7.0,
-            'description': 'Average overall score',
-            'suggested_actions': ['Fix prompts', 'Check sources'],
-        }]
+        alerts = [
+            {
+                'metric_name': 'average_overall_score',
+                'value': 5.5,
+                'threshold': 7.0,
+                'description': 'Average overall score',
+                'suggested_actions': ['Fix prompts', 'Check sources'],
+            }
+        ]
         send_drift_alert_email(alerts)
 
         import email as email_mod
+
         smtp_instance = mock_smtp.return_value.__enter__.return_value
         smtp_instance.sendmail.assert_called_once()
         raw = smtp_instance.sendmail.call_args[0][2]
@@ -237,78 +308,134 @@ class TestDriftEmails:
         assert 'Fix prompts' in html
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_send_drift_recovery_email(self, mock_open, mock_yaml, mock_smtp):
         from tools.send_approval_email_tool import send_drift_recovery_email
 
-        recoveries = [{
-            'metric_name': 'consecutive_failures',
-            'value': 0,
-            'description': 'Consecutive failures',
-        }]
+        recoveries = [
+            {
+                'metric_name': 'consecutive_failures',
+                'value': 0,
+                'description': 'Consecutive failures',
+            }
+        ]
         send_drift_recovery_email(recoveries)
 
         smtp_instance = mock_smtp.return_value.__enter__.return_value
         smtp_instance.sendmail.assert_called_once()
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': False}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': False}},
+    )
     @patch('builtins.open')
     @patch.dict('os.environ', {'EMAIL_TO': 'x@x.com'})
     def test_drift_alert_skipped_when_disabled(self, mock_open, mock_yaml, mock_smtp):
         from tools.send_approval_email_tool import send_drift_alert_email
 
-        send_drift_alert_email([{'metric_name': 'x', 'value': 1, 'threshold': 5, 'description': 'x', 'suggested_actions': []}])
+        send_drift_alert_email(
+            [
+                {
+                    'metric_name': 'x',
+                    'value': 1,
+                    'threshold': 5,
+                    'description': 'x',
+                    'suggested_actions': [],
+                }
+            ]
+        )
         mock_smtp.assert_not_called()
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': False}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': False}},
+    )
     @patch('builtins.open')
     @patch.dict('os.environ', {'EMAIL_TO': 'x@x.com'})
-    def test_drift_recovery_skipped_when_disabled(self, mock_open, mock_yaml, mock_smtp):
+    def test_drift_recovery_skipped_when_disabled(
+        self, mock_open, mock_yaml, mock_smtp
+    ):
         from tools.send_approval_email_tool import send_drift_recovery_email
 
-        send_drift_recovery_email([{'metric_name': 'x', 'value': 1, 'description': 'x'}])
+        send_drift_recovery_email(
+            [{'metric_name': 'x', 'value': 1, 'description': 'x'}]
+        )
         mock_smtp.assert_not_called()
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_drift_alert_handles_smtp_failure(self, mock_open, mock_yaml, mock_smtp):
         from tools.send_approval_email_tool import send_drift_alert_email
 
-        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception('SMTP down')
+        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception(
+            'SMTP down'
+        )
         # Should not raise
-        send_drift_alert_email([{'metric_name': 'x', 'value': 1, 'threshold': 5, 'description': 'x', 'suggested_actions': []}])
+        send_drift_alert_email(
+            [
+                {
+                    'metric_name': 'x',
+                    'value': 1,
+                    'threshold': 5,
+                    'description': 'x',
+                    'suggested_actions': [],
+                }
+            ]
+        )
 
     @patch('tools.send_approval_email_tool.smtplib.SMTP')
-    @patch('tools.send_approval_email_tool.yaml.safe_load', return_value={'failure_notification': {'enabled': True}})
+    @patch(
+        'tools.send_approval_email_tool.yaml.safe_load',
+        return_value={'failure_notification': {'enabled': True}},
+    )
     @patch('builtins.open')
-    @patch.dict('os.environ', {
-        'EMAIL_SMTP_SERVER': 'smtp.test.com',
-        'EMAIL_SMTP_PORT': '587',
-        'EMAIL_FROM': 'test@test.com',
-        'EMAIL_PASSWORD': 'pass',
-        'EMAIL_TO': 'admin@test.com',
-    })
+    @patch.dict(
+        'os.environ',
+        {
+            'EMAIL_SMTP_SERVER': 'smtp.test.com',
+            'EMAIL_SMTP_PORT': '587',
+            'EMAIL_FROM': 'test@test.com',
+            'EMAIL_PASSWORD': 'pass',
+            'EMAIL_TO': 'admin@test.com',
+        },
+    )
     def test_drift_recovery_handles_smtp_failure(self, mock_open, mock_yaml, mock_smtp):
         from tools.send_approval_email_tool import send_drift_recovery_email
 
-        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception('SMTP down')
+        mock_smtp.return_value.__enter__.return_value.sendmail.side_effect = Exception(
+            'SMTP down'
+        )
         # Should not raise
-        send_drift_recovery_email([{'metric_name': 'x', 'value': 1, 'description': 'x'}])
+        send_drift_recovery_email(
+            [{'metric_name': 'x', 'value': 1, 'description': 'x'}]
+        )

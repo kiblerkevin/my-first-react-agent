@@ -3,7 +3,6 @@
 import json
 import os
 import sys
-import tempfile
 
 import pytest
 
@@ -17,7 +16,6 @@ sys.path.insert(0, _project_root)
 
 from memory.database import init_db
 from memory.memory import Memory
-
 
 # --- Realistic mock data ---
 
@@ -270,9 +268,7 @@ def tmp_db(tmp_path):
 @pytest.fixture
 def memory(tmp_db, monkeypatch):
     """Memory instance pointed at the temp database."""
-    monkeypatch.setattr(
-        'memory.memory.DATABASE_CONFIG_PATH', '__nonexistent__'
-    )
+    monkeypatch.setattr('memory.memory.DATABASE_CONFIG_PATH', '__nonexistent__')
 
     class _TestMemory(Memory):
         def __init__(self, db_path):

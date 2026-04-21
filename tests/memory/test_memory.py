@@ -60,14 +60,16 @@ class TestMemoryCRUD:
         assert memory.get_article_summary('http://nonexistent.com') is None
 
     def test_save_blog_draft_returns_id(self, memory):
-        draft_id = memory.save_blog_draft({
-            'title': 'Test',
-            'content': '<h1>Test</h1>',
-            'excerpt': 'Excerpt',
-            'teams_covered': ['Cubs'],
-            'article_count': 3,
-            'overall_score': 8.5,
-        })
+        draft_id = memory.save_blog_draft(
+            {
+                'title': 'Test',
+                'content': '<h1>Test</h1>',
+                'excerpt': 'Excerpt',
+                'teams_covered': ['Cubs'],
+                'article_count': 3,
+                'overall_score': 8.5,
+            }
+        )
         assert draft_id > 0
 
     def test_create_and_get_workflow_run(self, memory):
@@ -89,7 +91,9 @@ class TestMemoryCRUD:
         assert memory.get_checkpoint('nonexistent') is None
 
     def test_oauth_token_save_and_retrieve(self, memory):
-        memory.save_oauth_token('wordpress', 'token123', blog_id='1', blog_url='http://blog.com')
+        memory.save_oauth_token(
+            'wordpress', 'token123', blog_id='1', blog_url='http://blog.com'
+        )
         assert memory.get_oauth_token('wordpress') == 'token123'
         assert memory.get_oauth_token('unknown') is None
 
@@ -141,16 +145,19 @@ class TestMemoryWorkflowOps:
     def test_update_workflow_run(self, memory):
         run_id = 'wf-update-test'
         memory.create_workflow_run(run_id)
-        memory.update_workflow_run(run_id, {
-            'status': 'success',
-            'steps_completed': ['fetch_scores', 'fetch_articles'],
-            'scores_fetched': 5,
-            'articles_fetched': 10,
-            'articles_new': 8,
-            'summaries_count': 4,
-            'overall_score': 8.5,
-            'email_sent': True,
-        })
+        memory.update_workflow_run(
+            run_id,
+            {
+                'status': 'success',
+                'steps_completed': ['fetch_scores', 'fetch_articles'],
+                'scores_fetched': 5,
+                'articles_fetched': 10,
+                'articles_new': 8,
+                'summaries_count': 4,
+                'overall_score': 8.5,
+                'email_sent': True,
+            },
+        )
         runs = memory.get_recent_runs(1)
         assert len(runs) == 1
         assert runs[0]['status'] == 'success'
@@ -170,9 +177,18 @@ class TestMemoryWorkflowOps:
     def test_save_summary_stats(self, memory):
         run_id = 'wf-stats-test'
         db_id = memory.create_workflow_run(run_id)
-        memory.save_summary_stats(db_id, [
-            {'team': 'Cubs', 'articles_fetched': 5, 'articles_summarized': 3, 'cache_hits': 1, 'cache_misses': 2},
-        ])
+        memory.save_summary_stats(
+            db_id,
+            [
+                {
+                    'team': 'Cubs',
+                    'articles_fetched': 5,
+                    'articles_summarized': 3,
+                    'cache_hits': 1,
+                    'cache_misses': 2,
+                },
+            ],
+        )
         cache = memory.get_summary_cache_stats(30)
         assert cache['cache_hits'] == 1
         assert cache['cache_misses'] == 2
@@ -180,7 +196,9 @@ class TestMemoryWorkflowOps:
     def test_update_workflow_publish_result(self, memory):
         run_id = 'wf-publish-test'
         memory.create_workflow_run(run_id)
-        memory.update_workflow_publish_result(run_id, post_id=42, post_url='http://x.com/42', success=True)
+        memory.update_workflow_publish_result(
+            run_id, post_id=42, post_url='http://x.com/42', success=True
+        )
         # Verify via get_recent_runs
         runs = memory.get_recent_runs(1)
         assert runs[0]['publish_success'] is True
@@ -189,7 +207,9 @@ class TestMemoryWorkflowOps:
         run_id = 'wf-revision-test'
         memory.create_workflow_run(run_id)
         memory.update_workflow_revision_metrics(
-            run_id, tool_calls=4, draft_attempts=2,
+            run_id,
+            tool_calls=4,
+            draft_attempts=2,
             score_progression=[7.0, 8.5],
             draft_iterations=[{'title': 'Draft 1'}, {'title': 'Draft 2'}],
         )
@@ -207,7 +227,9 @@ class TestMemoryWorkflowOps:
         for i in range(3):
             run_id = f'window-run-{i}'
             memory.create_workflow_run(run_id)
-            memory.update_workflow_run(run_id, {'status': 'success', 'steps_completed': []})
+            memory.update_workflow_run(
+                run_id, {'status': 'success', 'steps_completed': []}
+            )
         runs = memory.get_runs_in_window(offset=0, limit=2)
         assert len(runs) == 2
 
@@ -215,14 +237,20 @@ class TestMemoryWorkflowOps:
         for i in range(3):
             run_id = f'count-run-{i}'
             memory.create_workflow_run(run_id)
-            memory.update_workflow_run(run_id, {'status': 'success', 'steps_completed': []})
+            memory.update_workflow_run(
+                run_id, {'status': 'success', 'steps_completed': []}
+            )
         assert memory.get_total_run_count() == 3
 
     def test_get_team_coverage(self, memory):
         import json
+
         from memory.database import Summary, get_session
+
         session = get_session(memory.engine)
-        session.add(Summary(html_content='x', teams_covered=json.dumps(['Cubs', 'Sox'])))
+        session.add(
+            Summary(html_content='x', teams_covered=json.dumps(['Cubs', 'Sox']))
+        )
         session.add(Summary(html_content='y', teams_covered=json.dumps(['Cubs'])))
         session.commit()
         session.close()
@@ -232,16 +260,24 @@ class TestMemoryWorkflowOps:
         assert coverage['Sox'] == 1
 
     def test_get_approval_stats(self, memory):
-        memory.create_pending_approval({
-            'token': 'a1', 'status': 'pending',
-            'expires_at': datetime.utcnow() + timedelta(hours=24),
-            'blog_title': 'T1', 'blog_content': 'C1',
-        })
-        memory.create_pending_approval({
-            'token': 'a2', 'status': 'pending',
-            'expires_at': datetime.utcnow() + timedelta(hours=24),
-            'blog_title': 'T2', 'blog_content': 'C2',
-        })
+        memory.create_pending_approval(
+            {
+                'token': 'a1',
+                'status': 'pending',
+                'expires_at': datetime.utcnow() + timedelta(hours=24),
+                'blog_title': 'T1',
+                'blog_content': 'C1',
+            }
+        )
+        memory.create_pending_approval(
+            {
+                'token': 'a2',
+                'status': 'pending',
+                'expires_at': datetime.utcnow() + timedelta(hours=24),
+                'blog_title': 'T2',
+                'blog_content': 'C2',
+            }
+        )
         memory.update_approval_status('a2', 'approved')
 
         stats = memory.get_approval_stats(30)
@@ -250,25 +286,38 @@ class TestMemoryWorkflowOps:
         assert stats['total'] == 2
 
     def test_get_expired_approvals(self, memory):
-        memory.create_pending_approval({
-            'token': 'expired1', 'status': 'pending',
-            'expires_at': datetime.utcnow() - timedelta(hours=1),
-            'blog_title': 'Old', 'blog_content': 'X',
-        })
+        memory.create_pending_approval(
+            {
+                'token': 'expired1',
+                'status': 'pending',
+                'expires_at': datetime.utcnow() - timedelta(hours=1),
+                'blog_title': 'Old',
+                'blog_content': 'X',
+            }
+        )
         expired = memory.get_expired_approvals()
         assert len(expired) == 1
         assert expired[0]['token'] == 'expired1'
 
     def test_save_and_get_evaluation(self, memory):
-        draft_id = memory.save_blog_draft({
-            'title': 'T', 'content': 'C', 'excerpt': 'E',
-            'teams_covered': [], 'article_count': 0, 'overall_score': 8.0,
-        })
-        memory.save_evaluation(draft_id, {
-            'evaluation_id': 'eval-1',
-            'criteria_scores': {'accuracy': 9.0, 'completeness': 8.0},
-            'criteria_reasoning': {'accuracy': 'Good', 'completeness': 'OK'},
-        })
+        draft_id = memory.save_blog_draft(
+            {
+                'title': 'T',
+                'content': 'C',
+                'excerpt': 'E',
+                'teams_covered': [],
+                'article_count': 0,
+                'overall_score': 8.0,
+            }
+        )
+        memory.save_evaluation(
+            draft_id,
+            {
+                'evaluation_id': 'eval-1',
+                'criteria_scores': {'accuracy': 9.0, 'completeness': 8.0},
+                'criteria_reasoning': {'accuracy': 'Good', 'completeness': 'OK'},
+            },
+        )
         trends = memory.get_evaluation_trends(30)
         assert len(trends) > 0
 
@@ -311,16 +360,28 @@ class TestMemoryPurgeAndEdgeCases:
 
         # Monkey-patch the log dir
         import unittest.mock
-        with unittest.mock.patch('os.path.exists', return_value=True), \
-             unittest.mock.patch('os.listdir', return_value=['old.log', 'new.log']), \
-             unittest.mock.patch('os.path.isfile', return_value=True), \
-             unittest.mock.patch('os.path.getmtime', side_effect=[old_time, datetime.utcnow().timestamp()]), \
-             unittest.mock.patch('os.remove') as mock_remove:
+
+        with (
+            unittest.mock.patch('os.path.exists', return_value=True),
+            unittest.mock.patch('os.listdir', return_value=['old.log', 'new.log']),
+            unittest.mock.patch('os.path.isfile', return_value=True),
+            unittest.mock.patch(
+                'os.path.getmtime',
+                side_effect=[old_time, datetime.utcnow().timestamp()],
+            ),
+            unittest.mock.patch('os.remove') as mock_remove,
+        ):
             memory.purge_old_logs()
             mock_remove.assert_called_once()
 
     def test_save_articles_with_published_at(self, memory):
-        articles = [{'url': 'http://dated.com', 'title': 'Dated', 'publishedAt': '2026-04-14T12:00:00Z'}]
+        articles = [
+            {
+                'url': 'http://dated.com',
+                'title': 'Dated',
+                'publishedAt': '2026-04-14T12:00:00Z',
+            }
+        ]
         memory.save_articles(articles)
         seen = memory.get_seen_urls()
         assert 'http://dated.com' in seen
@@ -332,7 +393,9 @@ class TestMemoryPurgeAndEdgeCases:
         assert len(seen) == 0
 
     def test_save_articles_handles_bad_date(self, memory):
-        articles = [{'url': 'http://baddate.com', 'title': 'Bad', 'publishedAt': 'not-a-date'}]
+        articles = [
+            {'url': 'http://baddate.com', 'title': 'Bad', 'publishedAt': 'not-a-date'}
+        ]
         memory.save_articles(articles)
         seen = memory.get_seen_urls()
         assert 'http://baddate.com' in seen
@@ -356,7 +419,9 @@ class TestMemoryPurgeAndEdgeCases:
         db_id = memory.create_workflow_run(run_id)
         memory.save_api_call_result(db_id, 'newsapi', 'success', article_count=10)
         memory.save_api_call_result(db_id, 'serpapi', 'success', article_count=5)
-        memory.save_api_call_result(db_id, 'espn', 'success', article_count=3)  # excluded
+        memory.save_api_call_result(
+            db_id, 'espn', 'success', article_count=3
+        )  # excluded
 
         dist = memory.get_source_distribution(30)
         assert dist.get('newsapi') == 10
@@ -375,13 +440,17 @@ class TestMemoryPurgeAndEdgeCases:
         assert any(r['run_id'] == run_id for r in runs)
 
     def test_get_run_iterations(self, memory):
-        import json
         run_id = 'iter-test'
         memory.create_workflow_run(run_id)
         memory.update_workflow_revision_metrics(
-            run_id, tool_calls=4, draft_attempts=2,
+            run_id,
+            tool_calls=4,
+            draft_attempts=2,
             score_progression=[7.0, 8.5],
-            draft_iterations=[{'title': 'D1', 'content': 'C1'}, {'title': 'D2', 'content': 'C2'}],
+            draft_iterations=[
+                {'title': 'D1', 'content': 'C1'},
+                {'title': 'D2', 'content': 'C2'},
+            ],
         )
         result = memory.get_run_iterations(run_id)
         assert result is not None
@@ -394,17 +463,24 @@ class TestMemoryPurgeAndEdgeCases:
     def test_update_workflow_run_with_usage_by_tool(self, memory):
         run_id = 'usage-test'
         memory.create_workflow_run(run_id)
-        memory.update_workflow_run(run_id, {
-            'status': 'success',
-            'steps_completed': [],
-            'usage_by_tool': {'summarize': {'input': 100, 'output': 50}},
-        })
+        memory.update_workflow_run(
+            run_id,
+            {
+                'status': 'success',
+                'steps_completed': [],
+                'usage_by_tool': {'summarize': {'input': 100, 'output': 50}},
+            },
+        )
         # Just verify it doesn't crash — usage_by_tool is stored as JSON
 
     def test_save_article_summary_skips_duplicate(self, memory):
         data = {
-            'url': 'http://dup.com', 'team': 'Cubs', 'summary': 'First.',
-            'event_type': 'game_recap', 'players_mentioned': [], 'is_relevant': True,
+            'url': 'http://dup.com',
+            'team': 'Cubs',
+            'summary': 'First.',
+            'event_type': 'game_recap',
+            'players_mentioned': [],
+            'is_relevant': True,
         }
         memory.save_article_summary(data)
         # Save again — should not error
@@ -428,6 +504,7 @@ class TestMemoryInit:
         mock_init_db.return_value = MagicMock()
 
         from memory.memory import Memory
+
         m = Memory()
         assert m.retention_days == 14
         assert m.log_retention_days == 7
@@ -437,16 +514,20 @@ class TestMemoryInit:
     def test_purge_old_logs_no_log_dir(self, memory):
         """Line 105: returns early when log dir doesn't exist."""
         import unittest.mock
+
         with unittest.mock.patch('os.path.exists', return_value=False):
             memory.purge_old_logs()  # Should not raise
 
     def test_purge_old_logs_skips_directories(self, memory):
         """Line 110: skips non-file entries."""
         import unittest.mock
-        with unittest.mock.patch('os.path.exists', return_value=True), \
-             unittest.mock.patch('os.listdir', return_value=['subdir']), \
-             unittest.mock.patch('os.path.isfile', return_value=False), \
-             unittest.mock.patch('os.remove') as mock_remove:
+
+        with (
+            unittest.mock.patch('os.path.exists', return_value=True),
+            unittest.mock.patch('os.listdir', return_value=['subdir']),
+            unittest.mock.patch('os.path.isfile', return_value=False),
+            unittest.mock.patch('os.remove') as mock_remove,
+        ):
             memory.purge_old_logs()
             mock_remove.assert_not_called()
 
@@ -460,17 +541,20 @@ class TestMemoryInit:
 
     def test_update_workflow_run_nonexistent(self, memory):
         """Line 479: does nothing for nonexistent run."""
-        memory.update_workflow_run('nonexistent', {'status': 'success', 'steps_completed': []})
+        memory.update_workflow_run(
+            'nonexistent', {'status': 'success', 'steps_completed': []}
+        )
 
     def test_get_run_iterations_with_evaluations(self, memory):
         """Lines 838-856: get_run_iterations returns evaluations paired with drafts."""
-        import json
-        from memory.database import Summary, Evaluation, get_session
+        from memory.database import Evaluation, Summary, get_session
 
         run_id = 'iter-eval-test'
         memory.create_workflow_run(run_id)
         memory.update_workflow_revision_metrics(
-            run_id, tool_calls=2, draft_attempts=1,
+            run_id,
+            tool_calls=2,
+            draft_attempts=1,
             score_progression=[8.0],
             draft_iterations=[{'title': 'D1', 'content': 'C1'}],
         )
@@ -481,14 +565,24 @@ class TestMemoryInit:
         session.add(summary)
         session.commit()
 
-        session.add(Evaluation(
-            evaluation_id='eval-1', summary_id=summary.id,
-            criterion='accuracy', score=9.0, reasoning='Good',
-        ))
-        session.add(Evaluation(
-            evaluation_id='eval-1', summary_id=summary.id,
-            criterion='completeness', score=8.0, reasoning='OK',
-        ))
+        session.add(
+            Evaluation(
+                evaluation_id='eval-1',
+                summary_id=summary.id,
+                criterion='accuracy',
+                score=9.0,
+                reasoning='Good',
+            )
+        )
+        session.add(
+            Evaluation(
+                evaluation_id='eval-1',
+                summary_id=summary.id,
+                criterion='completeness',
+                score=8.0,
+                reasoning='OK',
+            )
+        )
         session.commit()
         session.close()
 
@@ -502,7 +596,6 @@ class TestMemoryInit:
         )
         assert has_eval
 
-
     def test_get_pending_approval_returns_none(self, memory):
         """Line 197: returns None when token not found."""
         assert memory.get_pending_approval('nonexistent-token') is None
@@ -514,10 +607,17 @@ class TestMemoryDrift:
     def test_get_drift_metrics(self, memory):
         run_id = 'drift-metrics-test'
         memory.create_workflow_run(run_id)
-        memory.update_workflow_run(run_id, {
-            'status': 'success', 'steps_completed': [], 'overall_score': 8.5,
-        })
-        memory.update_workflow_revision_metrics(run_id, tool_calls=3, draft_attempts=1, score_progression=[8.5])
+        memory.update_workflow_run(
+            run_id,
+            {
+                'status': 'success',
+                'steps_completed': [],
+                'overall_score': 8.5,
+            },
+        )
+        memory.update_workflow_revision_metrics(
+            run_id, tool_calls=3, draft_attempts=1, score_progression=[8.5]
+        )
 
         data = memory.get_drift_metrics(window=5)
         assert len(data['runs']) >= 1
@@ -536,7 +636,9 @@ class TestMemoryDrift:
         assert alerts[0]['metric_value'] == 5.0
 
     def test_resolve_drift_alert(self, memory):
-        memory.create_drift_alert(metric_name='to_resolve', metric_value=3.0, threshold=7.0)
+        memory.create_drift_alert(
+            metric_name='to_resolve', metric_value=3.0, threshold=7.0
+        )
         memory.resolve_drift_alert('to_resolve')
 
         alerts = memory.get_active_drift_alerts()
@@ -548,11 +650,15 @@ class TestMemoryDrift:
 
     def test_has_active_alert(self, memory):
         assert memory.has_active_alert('some_metric') is False
-        memory.create_drift_alert(metric_name='some_metric', metric_value=1.0, threshold=5.0)
+        memory.create_drift_alert(
+            metric_name='some_metric', metric_value=1.0, threshold=5.0
+        )
         assert memory.has_active_alert('some_metric') is True
 
     def test_has_active_alert_after_resolve(self, memory):
-        memory.create_drift_alert(metric_name='resolved_metric', metric_value=1.0, threshold=5.0)
+        memory.create_drift_alert(
+            metric_name='resolved_metric', metric_value=1.0, threshold=5.0
+        )
         memory.resolve_drift_alert('resolved_metric')
         assert memory.has_active_alert('resolved_metric') is False
 
@@ -576,7 +682,10 @@ class TestMemoryBackup:
 
         # Patch sqlite3.connect to raise on the source connection
         import unittest.mock
-        with unittest.mock.patch('sqlite3.connect', side_effect=Exception('Cannot open')):
+
+        with unittest.mock.patch(
+            'sqlite3.connect', side_effect=Exception('Cannot open')
+        ):
             result = memory.backup_database()
 
         assert result is None
@@ -628,12 +737,17 @@ class TestMemoryInitBackupConfig:
     @patch('memory.memory.init_db')
     def test_loads_backup_config(self, mock_init_db, mock_open, mock_yaml):
         mock_yaml.return_value = {
-            'database': {'path': 'test.db', 'retention_days': 14, 'log_retention_days': 7},
+            'database': {
+                'path': 'test.db',
+                'retention_days': 14,
+                'log_retention_days': 7,
+            },
             'backup': {'path': 'my/backups', 'retention_days': 60},
         }
         mock_init_db.return_value = MagicMock()
 
         from memory.memory import Memory
+
         m = Memory()
         assert m.backup_path == 'my/backups'
         assert m.backup_retention_days == 60
@@ -641,13 +755,16 @@ class TestMemoryInitBackupConfig:
     @patch('memory.memory.yaml.safe_load')
     @patch('builtins.open')
     @patch('memory.memory.init_db')
-    def test_defaults_when_backup_config_missing(self, mock_init_db, mock_open, mock_yaml):
+    def test_defaults_when_backup_config_missing(
+        self, mock_init_db, mock_open, mock_yaml
+    ):
         mock_yaml.return_value = {
             'database': {'path': 'test.db'},
         }
         mock_init_db.return_value = MagicMock()
 
         from memory.memory import Memory
+
         m = Memory()
         assert m.backup_path == 'data/backups'
         assert m.backup_retention_days == 30
@@ -664,7 +781,9 @@ class TestWALMode:
 
         # Query via SQLAlchemy to trigger the connect event
         session = get_session(engine)
-        result = session.execute(__import__('sqlalchemy').text('PRAGMA journal_mode')).fetchone()
+        result = session.execute(
+            __import__('sqlalchemy').text('PRAGMA journal_mode')
+        ).fetchone()
         session.close()
         assert result[0] == 'wal'
 
@@ -673,7 +792,6 @@ class TestFilePermissions:
     """Tests for restrictive file permissions on database and backup files."""
 
     def test_init_db_sets_600_permissions(self, tmp_path):
-        import stat
 
         db_path = str(tmp_path / 'perms_test.db')
         init_db(db_path)
@@ -681,7 +799,6 @@ class TestFilePermissions:
         assert mode == 0o600
 
     def test_backup_sets_600_permissions(self, memory, tmp_path):
-        import stat
 
         backup_dir = str(tmp_path / 'backup_perms')
         memory.backup_path = backup_dir
