@@ -413,5 +413,6 @@ def start_scheduler() -> None:
 if __name__ == '__main__':
     start_scheduler()
     port = int(os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000').split(':')[-1])
-    logger.info(f'Approval server starting on port {port}')
-    app.run(host='0.0.0.0', port=port, debug=False)
+    host = os.getenv('APPROVAL_BIND_HOST', '127.0.0.1')
+    logger.info(f'Approval server starting on {host}:{port}')
+    app.run(host=host, port=port, debug=False)
