@@ -4,3 +4,30 @@ rate_limiting:
   default: "60/minute"
   approval_endpoints: "10/minute"
   dashboard_api: "30/minute"
+
+# Auth0 configuration
+auth0:
+  domain: "your-tenant.auth0.com"
+  client_id_key: "AUTH0_CLIENT_ID"  # key name in secrets provider
+  client_secret_key: "AUTH0_CLIENT_SECRET"  # key name in secrets provider
+  audience: "https://chicago-sports-recap/api"
+
+# Role mappings: email -> role (editor or admin)
+# Users not listed here get anonymous access (read-only dashboard)
+role_mappings:
+  # admin@example.com: admin
+  # editor@example.com: editor
+
+# Role route permissions
+roles:
+  anonymous:
+    - "GET /dashboard"
+    - "GET /dashboard/*"
+    - "GET /health"
+  editor:
+    - "GET /approve/*"
+    - "POST /reject/*"
+    - "GET /reject/*"
+    - "GET /status/*"
+  admin:
+    - "GET /oauth/*"

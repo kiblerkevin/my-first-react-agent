@@ -25,7 +25,7 @@ ignore = [
 fixable = ["I", "F401", "W", "E"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D", "E402"]
+"tests/*" = ["D", "E402", "SIM117"]
 "prompts/*" = ["D", "E501"]
 "server/approval_server.py" = ["E402"]
 

@@ -6,6 +6,7 @@ Before first run, ensure the following are installed:
 - [ ] Python 3.14+
 - [ ] Docker & Docker Compose
 - [ ] pip dependencies: `pip install -r requirements.txt`
+- [ ] Dev dependencies (for testing/linting): `pip install -r requirements-dev.txt`
 
 ## Environment Configuration
 
@@ -41,6 +42,82 @@ Before first run, ensure the following are installed:
 | `WORDPRESS_URL` | Your WordPress.com site URL |
 | `LANGFUSE_PUBLIC_KEY` | From Langfuse project settings |
 | `LANGFUSE_SECRET_KEY` | From Langfuse project settings |
+| `AUTH0_CLIENT_ID` | From Auth0 application settings |
+| `AUTH0_CLIENT_SECRET` | From Auth0 application settings |
+
+---
+
+## Security Configuration
+
+### Secrets management
+
+Secrets are managed via a pluggable provider configured in `config/database.yaml`:
+
+```yaml
+secrets:
+  provider: keychain  # "keychain" (macOS) or "env" (CI/Docker)
+  keychain_service: "chicago-sports-recap"
+```
+
+- **macOS Keychain** (recommended for local): Run `python scripts/migrate_secrets.py` to migrate from `.env`
+- **Environment variables** (CI/Docker): Set `SECRETS_PROVIDER=env` and inject secrets via the environment
+- **Verify secrets**: `python scripts/migrate_secrets.py --verify`
+
+### Auth0 authentication
+
+Role-based access control is configured in `config/auth.yaml`:
+
+```yaml
+auth0:
+  domain: "your-tenant.auth0.com"
+  client_id_key: "AUTH0_CLIENT_ID"
+  client_secret_key: "AUTH0_CLIENT_SECRET"
+
+role_mappings:
+  admin@example.com: admin
+  editor@example.com: editor
+```
+
+| Role | Access |
+|------|--------|
+| anonymous | Dashboard (read-only), health endpoint |
+| editor | Approve/reject blog posts, view status |
+| admin | WordPress OAuth settings, all editor permissions |
+
+First-time Auth0 setup:
+1. Create an Auth0 application (Regular Web Application)
+2. Set callback URL to `http://localhost:5000/auth/callback`
+3. Store `AUTH0_CLIENT_ID` and `AUTH0_CLIENT_SECRET` in the secrets provider
+4. Set `auth0.domain` in `config/auth.yaml`
+5. Add email → role mappings in `config/auth.yaml`
+
+If Auth0 is not configured, authentication is disabled and all routes are open.
+
+### OAuth token encryption
+
+WordPress OAuth tokens are encrypted at rest in the database using Fernet encryption derived from `APPROVAL_SECRET_KEY`. Existing plaintext tokens are auto-migrated on first read.
+
+⚠️ **If `APPROVAL_SECRET_KEY` changes, encrypted tokens become unreadable.** Re-authorize WordPress at `/oauth/start` after rotating this key.
+
+### Rate limiting
+
+Configured in `config/auth.yaml`:
+
+```yaml
+rate_limiting:
+  default: "60/minute"
+  approval_endpoints: "10/minute"
+  dashboard_api: "30/minute"
+```
+
+The health endpoint is exempt. Rate limits apply at the application level and do not conflict with Cloudflare/nginx proxy limits.
+
+### Database security
+
+- SQLite database file permissions are set to `0600` (owner-only)
+- WAL mode is enabled for concurrent read/write safety
+- Backup files also have `0600` permissions
+- Daily backups after each workflow run, 30-day retention
 
 ---
 
@@ -65,7 +142,8 @@ After installation, services start automatically on login. No manual startup nee
 - [ ] Wait ~60 seconds for Docker containers to start
 - [ ] Visit http://localhost:3000 — create Langfuse account and project, store keys via `python scripts/migrate_secrets.py` or set in environment
 - [ ] Run `launchctl start com.chicagosportsrecap.approval-server`
-- [ ] Complete WordPress OAuth: visit http://localhost:5000/oauth/start
+- [ ] Complete WordPress OAuth: log in as admin, then visit http://localhost:5000/oauth/start
+- [ ] Configure Auth0 (see Security Configuration above)
 
 ### Cloudflare Tunnel setup
 
@@ -107,17 +185,19 @@ docker compose up -d
 python server/approval_server.py
 ```
 
-- [ ] Verify server is running: visit http://localhost:5000/status/test (should return "Invalid Token" page)
+- [ ] Verify server is running: visit http://localhost:5000/health (should return `{"status": "ok"}`)
+- [ ] Verify dashboard: visit http://localhost:5000/dashboard (accessible without login)
 - [ ] This also starts the background scheduler:
   - Daily workflow cron at 6:00 AM CT
   - Expired approval checker every 60 minutes
 
 ### 3. WordPress OAuth (one-time setup)
 
+- [ ] Log in as admin via Auth0 (if configured)
 - [ ] Visit http://localhost:5000/oauth/start
 - [ ] Authorize the application on WordPress.com
 - [ ] Verify success page shows your blog URL
-- [ ] This only needs to be done once — the token is stored in the database
+- [ ] This only needs to be done once — the token is encrypted and stored in the database
 
 ### 4. Cloudflare Tunnel (if using remote approval)
 
@@ -156,7 +236,9 @@ No manual action needed — just keep the approval server running (automatic wit
 | Langfuse traces | http://localhost:3000 — look for traces after a workflow run |
 | Dashboard | http://localhost:5000/dashboard — workflow performance, API health, evaluation trends |
 | Draft iterations | http://localhost:5000/dashboard/iterations — draft/evaluation history per run |
-| Approval server | http://localhost:5000/status/test — should return 404 page |
+| Approval server | http://localhost:5000/health — should return `{"status": "ok"}` |
+| Drift alerts | http://localhost:5000/dashboard/api/drift — active drift alerts |
+| Secrets | `python scripts/migrate_secrets.py --verify` — all keys accessible |
 | Database | `data/articles.db` — should exist after first run |
 | Logs | `logs/app_YYYYMMDD.log` — check for errors |
 | Service logs | `logs/approval_server_stdout.log`, `logs/docker_stdout.log` |
@@ -168,9 +250,14 @@ No manual action needed — just keep the approval server running (automatic wit
 
 | Issue | Solution |
 |-------|----------|
-| `No WordPress OAuth token found` | Visit http://localhost:5000/oauth/start to authorize |
-| `OAuth token is invalid or revoked` | Re-authorize at http://localhost:5000/oauth/start |
+| `No WordPress OAuth token found` | Log in as admin, visit http://localhost:5000/oauth/start to authorize |
+| `OAuth token is invalid or revoked` | Re-authorize at http://localhost:5000/oauth/start (requires admin login) |
+| `APPROVAL_SECRET_KEY` rotated | Re-authorize WordPress OAuth — encrypted tokens are invalidated on key change |
 | `Email sent: False` | Check Gmail App Password — run `python scripts/migrate_secrets.py --verify` to confirm EMAIL_PASSWORD is set |
+| `Login Required` on approval link | Log in via Auth0 with an editor or admin account |
+| `Access Denied` on approval link | Your Auth0 account needs editor role — update `role_mappings` in `config/auth.yaml` |
+| `Auth0 not configured` warning | Set `auth0.domain`, `AUTH0_CLIENT_ID`, `AUTH0_CLIENT_SECRET` — see Security Configuration |
+| `429 Too Many Requests` | Rate limit exceeded — wait 1 minute or adjust limits in `config/auth.yaml` |
 | `No new articles found` | Normal if workflow already ran today — articles are deduplicated across runs |
 | Langfuse connection errors | Verify Docker is running: `docker compose ps` |
 | `Workflow Skipped` | Check `skip_reason` — either no new articles or no relevant summaries |

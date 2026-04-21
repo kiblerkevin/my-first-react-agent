@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from memory.memory import Memory
 from models.inputs.wordpress_publish_input import WordPressPublishInput
+from server.auth import init_auth, require_role
 from server.dashboard import dashboard_bp
 from tools.wordpress_publish_tool import WordPressPublishTool
 from utils.logger.logger import setup_logger
@@ -40,6 +41,12 @@ memory = Memory()
 from flask_wtf.csrf import CSRFProtect
 
 csrf = CSRFProtect(app)
+init_auth(app)
+
+# Exempt auth routes from CSRF (Auth0 redirects)
+csrf.exempt('auth_login')
+csrf.exempt('auth_callback')
+csrf.exempt('auth_logout')
 
 # Rate limiting
 AUTH_CONFIG_PATH = 'config/auth.yaml'
@@ -180,6 +187,7 @@ def health() -> Any:
 
 
 @app.route('/oauth/start')
+@require_role('admin')
 def oauth_start() -> Any:
     """Redirect to WordPress OAuth authorization page."""
     params = {
@@ -249,6 +257,7 @@ def oauth_callback() -> Any:
 
 @app.route('/approve/<token>')
 @limiter.limit(_rl_config.get('approval_endpoints', '10/minute'))
+@require_role('editor')
 def approve(token: str) -> Any:
     """Approve a blog post and trigger WordPress publish."""
     try:
@@ -342,6 +351,7 @@ def approve(token: str) -> Any:
 
 @app.route('/reject/<token>', methods=['GET', 'POST'])
 @limiter.limit(_rl_config.get('approval_endpoints', '10/minute'))
+@require_role('editor')
 def reject(token: str) -> Any:
     """Show rejection form (GET) or process rejection with feedback (POST)."""
     try:
@@ -371,6 +381,7 @@ def reject(token: str) -> Any:
 
 
 @app.route('/status/<token>')
+@require_role('editor')
 def status(token: str) -> Any:
     """Show the current status of an approval request."""
     approval = memory.get_pending_approval(token)

@@ -1,6 +1,28 @@
 """Tests for server/approval_server.py."""
 
+from contextlib import contextmanager
 from unittest.mock import patch
+
+EDITOR_USER = {
+    'email': 'editor@test.com',
+    'name': 'Editor',
+    'picture': '',
+    'role': 'editor',
+}
+ADMIN_USER = {
+    'email': 'admin@test.com',
+    'name': 'Admin',
+    'picture': '',
+    'role': 'admin',
+}
+
+
+@contextmanager
+def _auth_session(client, user):
+    """Inject an authenticated user session into the test client."""
+    with client.session_transaction() as sess:
+        sess['user'] = user
+    yield client
 
 
 @patch('server.approval_server.Memory')
@@ -113,9 +135,10 @@ def test_approve_rejects_tampered_token(mock_memory_cls):
     from server.approval_server import app
 
     with app.test_client() as client:
-        response = client.get('/approve/tampered-garbage-token')
-        assert response.status_code == 404
-        assert b'Invalid Token' in response.data
+        with _auth_session(client, EDITOR_USER):
+            response = client.get('/approve/tampered-garbage-token')
+            assert response.status_code == 404
+            assert b'Invalid Token' in response.data
 
 
 @patch('server.approval_server.Memory')
@@ -124,7 +147,10 @@ def test_reject_rejects_tampered_token(mock_memory_cls):
     from server.approval_server import app
 
     with app.test_client() as client:
-        response = client.get('/reject/tampered-garbage-token')
+        with _auth_session(client, EDITOR_USER):
+            response = client.get('/reject/tampered-garbage-token')
+            assert response.status_code == 404
+            assert b'Invalid Token' in response.data
         assert response.status_code == 404
         assert b'Invalid Token' in response.data
 
@@ -148,9 +174,10 @@ def test_approve_rejects_expired_token(mock_memory_cls):
         original_expiry = srv._approval_expiry_seconds
         srv._approval_expiry_seconds = 0
         try:
-            response = client.get(f'/approve/{token}')
-            assert response.status_code == 404
-            assert b'Invalid Token' in response.data
+            with _auth_session(client, EDITOR_USER):
+                response = client.get(f'/approve/{token}')
+                assert response.status_code == 404
+                assert b'Invalid Token' in response.data
         finally:
             srv._approval_expiry_seconds = original_expiry
 
@@ -166,9 +193,10 @@ def test_approve_accepts_valid_token(mock_memory_cls):
     token = _approval_serializer.dumps('Test Post', salt='approval')
 
     with app.test_client() as client:
-        response = client.get(f'/approve/{token}')
-        # Token is valid but no DB record — returns 404 (not found in DB)
-        assert response.status_code == 404
+        with _auth_session(client, EDITOR_USER):
+            response = client.get(f'/approve/{token}')
+            # Token is valid but no DB record — returns 404 (not found in DB)
+            assert response.status_code == 404
 
 
 @patch('server.approval_server.Memory')
@@ -208,39 +236,40 @@ def test_reject_post_with_csrf_succeeds(mock_memory_cls):
 
     app.config['WTF_CSRF_ENABLED'] = True
     with app.test_client() as client:
-        # GET the form to obtain the CSRF token
-        get_response = client.get(f'/reject/{token}')
-        assert get_response.status_code == 200
+        with _auth_session(client, EDITOR_USER):
+            # GET the form to obtain the CSRF token
+            get_response = client.get(f'/reject/{token}')
+            assert get_response.status_code == 200
 
-        # Extract CSRF token from the form HTML
-        html = get_response.data.decode()
-        import re
+            # Extract CSRF token from the form HTML
+            html = get_response.data.decode()
+            import re
 
-        match = re.search(r'name="csrf_token" value="([^"]+)"', html)
-        assert match is not None
-        csrf_token = match.group(1)
+            match = re.search(r'name="csrf_token" value="([^"]+)"', html)
+            assert match is not None
+            csrf_token = match.group(1)
 
-        # POST with the CSRF token
-        response = client.post(
-            f'/reject/{token}',
-            data={'feedback': 'needs work', 'csrf_token': csrf_token},
-        )
-        assert response.status_code == 200
-        assert b'Rejected' in response.data
+            # POST with the CSRF token
+            response = client.post(
+                f'/reject/{token}',
+                data={'feedback': 'needs work', 'csrf_token': csrf_token},
+            )
+            assert response.status_code == 200
+            assert b'Rejected' in response.data
 
 
 @patch('server.approval_server.Memory')
 def test_rate_limit_returns_429(mock_memory_cls):
     """Exceeding rate limit returns 429."""
-    from server.approval_server import app
+    from server.approval_server import app, limiter
 
-    # Set a very low limit for testing
+    limiter.reset()
     with app.test_client() as client:
-        # The approve endpoint has 10/minute limit
-        # Use a tampered token so we get 404 quickly without DB calls
-        for _ in range(11):
-            response = client.get('/approve/fake-token')
-        assert response.status_code == 429
+        with _auth_session(client, EDITOR_USER):
+            for _ in range(11):
+                response = client.get('/approve/fake-token')
+            assert response.status_code == 429
+    limiter.reset()
 
 
 @patch('server.approval_server.Memory')
@@ -249,13 +278,14 @@ def test_rate_limit_headers_present(mock_memory_cls):
     from server.approval_server import app
 
     with app.test_client() as client:
-        response = client.get('/approve/fake-token')
-        # flask-limiter adds these headers
-        assert (
-            'X-RateLimit-Limit' in response.headers
-            or 'Retry-After' in response.headers
-            or response.status_code in (404, 429)
-        )
+        with _auth_session(client, EDITOR_USER):
+            response = client.get('/approve/fake-token')
+            # flask-limiter adds these headers
+            assert (
+                'X-RateLimit-Limit' in response.headers
+                or 'Retry-After' in response.headers
+                or response.status_code in (404, 429)
+            )
 
 
 @patch('server.approval_server.Memory')

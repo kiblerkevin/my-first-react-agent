@@ -123,7 +123,7 @@
 
 **Tests:** Mock Auth0 token validation, test each role's access to protected/unprotected routes.
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 
 ---
 
