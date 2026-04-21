@@ -180,7 +180,7 @@
 
 **Tests:** Verify POST without CSRF token returns 400, POST with valid token succeeds.
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 
 ---
 

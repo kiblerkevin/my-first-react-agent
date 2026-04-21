@@ -29,8 +29,14 @@ SCHEDULER_CONFIG_PATH = 'config/scheduler.yaml'
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
 app = Flask(__name__)
+app.secret_key = os.getenv('APPROVAL_SECRET_KEY', 'dev-secret-key')
 app.register_blueprint(dashboard_bp)
 memory = Memory()
+
+# CSRF protection
+from flask_wtf.csrf import CSRFProtect
+
+csrf = CSRFProtect(app)
 
 # Approval token validation
 with open(ORCHESTRATION_CONFIG_PATH, 'r') as _f:
@@ -90,6 +96,7 @@ REJECT_FORM_PAGE = """
 <h1 style="color: #dc3545;">❌ Reject Blog Post</h1>
 <p><strong>{{ title }}</strong></p>
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="feedback"><strong>Feedback (optional):</strong></label><br>
     <textarea name="feedback" id="feedback" rows="6"
               style="width: 100%; margin: 10px 0; padding: 10px; font-size: 14px;"

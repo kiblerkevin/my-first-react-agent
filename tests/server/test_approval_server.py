@@ -163,3 +163,58 @@ def test_approve_accepts_valid_token(mock_memory_cls):
         response = client.get(f'/approve/{token}')
         # Token is valid but no DB record — returns 404 (not found in DB)
         assert response.status_code == 404
+
+
+@patch('server.approval_server.Memory')
+def test_reject_post_without_csrf_returns_400(mock_memory_cls):
+    """POST to reject without CSRF token returns 400."""
+    from server.approval_server import app, _approval_serializer
+    import server.approval_server as srv
+
+    token = _approval_serializer.dumps('Test Post', salt='approval')
+
+    mock_memory = mock_memory_cls.return_value
+    mock_memory.get_pending_approval.return_value = {
+        'status': 'pending', 'blog_title': 'Test',
+    }
+    srv.memory = mock_memory
+
+    with app.test_client() as client:
+        response = client.post(f'/reject/{token}', data={'feedback': 'bad'})
+        assert response.status_code == 400
+
+
+@patch('server.approval_server.Memory')
+def test_reject_post_with_csrf_succeeds(mock_memory_cls):
+    """POST to reject with valid CSRF token succeeds."""
+    from server.approval_server import app, _approval_serializer
+    import server.approval_server as srv
+
+    token = _approval_serializer.dumps('Test Post', salt='approval')
+
+    mock_memory = mock_memory_cls.return_value
+    mock_memory.get_pending_approval.return_value = {
+        'status': 'pending', 'blog_title': 'Test',
+    }
+    srv.memory = mock_memory
+
+    app.config['WTF_CSRF_ENABLED'] = True
+    with app.test_client() as client:
+        # GET the form to obtain the CSRF token
+        get_response = client.get(f'/reject/{token}')
+        assert get_response.status_code == 200
+
+        # Extract CSRF token from the form HTML
+        html = get_response.data.decode()
+        import re
+        match = re.search(r'name="csrf_token" value="([^"]+)"', html)
+        assert match is not None
+        csrf_token = match.group(1)
+
+        # POST with the CSRF token
+        response = client.post(
+            f'/reject/{token}',
+            data={'feedback': 'needs work', 'csrf_token': csrf_token},
+        )
+        assert response.status_code == 200
+        assert b'Rejected' in response.data
