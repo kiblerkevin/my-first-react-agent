@@ -81,10 +81,17 @@ class RevisionAgent:
             draft_tool.name: {
                 'summaries': summaries,
                 'scores': scores,
-            }
+            },
+            evaluate_tool.name: {
+                'summaries': summaries,
+                'scores': scores,
+            },
         }
         if rejection_feedback:
             required_tool_context[draft_tool.name]['rejection_feedback'] = (
+                rejection_feedback
+            )
+            required_tool_context[evaluate_tool.name]['rejection_feedback'] = (
                 rejection_feedback
             )
 

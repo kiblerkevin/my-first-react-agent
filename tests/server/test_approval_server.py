@@ -36,7 +36,9 @@ def test_security_headers_present(mock_memory_cls):
         response = client.get('/health')
         assert response.headers['X-Content-Type-Options'] == 'nosniff'
         assert response.headers['X-Frame-Options'] == 'DENY'
-        assert response.headers['Content-Security-Policy'] == "default-src 'self'"
+        csp = response.headers['Content-Security-Policy']
+        assert "default-src 'self'" in csp
+        assert 'https://cdn.jsdelivr.net' in csp
         assert response.headers['X-XSS-Protection'] == '1; mode=block'
 
 
