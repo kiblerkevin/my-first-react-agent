@@ -1,10 +1,11 @@
 """Base class for API-based article collectors."""
 
-import os
 from typing import Any
 
 import yaml
 from dotenv import load_dotenv
+
+from utils.secrets import get_secret
 
 config_path = 'config/sources.yaml'
 
@@ -23,7 +24,7 @@ class APICollector:
         with open(config_path, 'r') as file:
             self.config: dict[str, Any] = yaml.safe_load(file)
         env_key_name = self.config['apis'][api_value].get('env_key_name', None)
-        self.api_key: str | None = os.getenv(env_key_name) if env_key_name else None
+        self.api_key: str | None = get_secret(env_key_name) if env_key_name else None
         self.language: str | None = self.config['apis'][api_value].get('language', None)
         self.lookback_hours: int = self.config['collection']['lookback_hours']
         self.page_size: int | None = self.config['apis'][api_value].get(

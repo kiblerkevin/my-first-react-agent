@@ -1,6 +1,5 @@
 """Anthropic Claude API client with rate limit retry and Langfuse observability."""
 
-import os
 import time
 from typing import Any
 
@@ -11,6 +10,7 @@ from dotenv import load_dotenv
 from langfuse import observe
 
 from utils.logger.logger import setup_logger
+from utils.secrets import get_secret
 
 load_dotenv()
 
@@ -31,7 +31,7 @@ class ClaudeClient:
             output_schema: Optional output schema (reserved for future use).
         """
         self.system_prompt = system_prompt
-        self.client = Anthropic(api_key=os.environ.get('ANTHROPIC_API_KEY'))
+        self.client = Anthropic(api_key=get_secret('ANTHROPIC_API_KEY'))
         self.output_schema = output_schema
 
         with open(LLMS_CONFIG_PATH, 'r') as f:

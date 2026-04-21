@@ -33,7 +33,7 @@
 
 **Tests:** Mock `SecretsProvider` in all existing tests, add unit tests for both providers.
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 
 ---
 

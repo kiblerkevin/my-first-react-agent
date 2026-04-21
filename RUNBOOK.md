@@ -9,16 +9,38 @@ Before first run, ensure the following are installed:
 
 ## Environment Configuration
 
-- [ ] Copy `.env.example` to `.env` (or verify `.env` exists)
-- [ ] Set `ANTHROPIC_API_KEY` — Anthropic API key
-- [ ] Set `NEWSAPI_KEY` — NewsAPI key
-- [ ] Set `SERPAPI_KEY` — SerpAPI key
-- [ ] Set `EMAIL_FROM` and `EMAIL_PASSWORD` — Gmail address + App Password (not account password)
-- [ ] Set `EMAIL_TO` — recipient email for approval notifications
-- [ ] Set `ERROR_EMAIL_TO` — recipient email for failure notifications
-- [ ] Set `APPROVAL_SECRET_KEY` — random secret for signing approval tokens
-- [ ] Set `WORDPRESS_CLIENT_ID` and `WORDPRESS_CLIENT_SECRET` — from developer.wordpress.com/apps
-- [ ] Set `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` — from Langfuse project settings (after step 2 below)
+### Option 1: macOS Keychain (recommended)
+
+- [ ] Run the migration script: `python scripts/migrate_secrets.py`
+- [ ] Verify: `python scripts/migrate_secrets.py --verify`
+- [ ] Confirm `config/database.yaml` has `secrets.provider: keychain`
+- [ ] Reduce `.env` to non-sensitive values only (e.g. `SECRETS_PROVIDER=keychain`)
+
+### Option 2: Environment variables (CI, Docker)
+
+- [ ] Set `SECRETS_PROVIDER=env` in the environment
+- [ ] Set all secrets as environment variables (see list below)
+
+### Required secrets
+
+| Key | Description |
+|-----|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `NEWSAPI_KEY` | NewsAPI key |
+| `SERPAPI_KEY` | SerpAPI key |
+| `EMAIL_FROM` | Gmail address for sending emails |
+| `EMAIL_PASSWORD` | Gmail App Password (not account password) |
+| `EMAIL_TO` | Recipient for approval notifications |
+| `ERROR_EMAIL_TO` | Recipient for failure/drift notifications |
+| `EMAIL_SMTP_SERVER` | SMTP server (e.g. smtp.gmail.com) |
+| `EMAIL_SMTP_PORT` | SMTP port (default: 587) |
+| `APPROVAL_SECRET_KEY` | Random secret for signing approval tokens |
+| `APPROVAL_BASE_URL` | Approval server URL (default: http://localhost:5000) |
+| `WORDPRESS_CLIENT_ID` | From developer.wordpress.com/apps |
+| `WORDPRESS_CLIENT_SECRET` | From developer.wordpress.com/apps |
+| `WORDPRESS_URL` | Your WordPress.com site URL |
+| `LANGFUSE_PUBLIC_KEY` | From Langfuse project settings |
+| `LANGFUSE_SECRET_KEY` | From Langfuse project settings |
 
 ---
 
@@ -41,7 +63,7 @@ After installation, services start automatically on login. No manual startup nee
 
 - [ ] Log out and log back in (or run `launchctl start com.chicagosportsrecap.docker`)
 - [ ] Wait ~60 seconds for Docker containers to start
-- [ ] Visit http://localhost:3000 — create Langfuse account and project, copy keys to `.env`
+- [ ] Visit http://localhost:3000 — create Langfuse account and project, store keys via `python scripts/migrate_secrets.py` or set in environment
 - [ ] Run `launchctl start com.chicagosportsrecap.approval-server`
 - [ ] Complete WordPress OAuth: visit http://localhost:5000/oauth/start
 
@@ -52,7 +74,7 @@ If using remote approval:
 2. Replace `PLACEHOLDER_TUNNEL_NAME` with your tunnel name
 3. Replace the cloudflared path if needed
 4. Re-run `./services/install.sh`
-5. Update `APPROVAL_BASE_URL` in `.env` to the tunnel URL
+5. Update `APPROVAL_BASE_URL` in Keychain: `security add-generic-password -s chicago-sports-recap -a APPROVAL_BASE_URL -w "https://your-tunnel-url" -U`
 
 ### Uninstall Services
 
@@ -100,7 +122,7 @@ python server/approval_server.py
 ### 4. Cloudflare Tunnel (if using remote approval)
 
 - [ ] Configure Cloudflare tunnel to forward to `localhost:5000`
-- [ ] Update `APPROVAL_BASE_URL` in `.env` to the tunnel URL
+- [ ] Update `APPROVAL_BASE_URL` in Keychain or environment to the tunnel URL
 - [ ] Restart the approval server after changing the URL
 
 ---
@@ -148,7 +170,7 @@ No manual action needed — just keep the approval server running (automatic wit
 |-------|----------|
 | `No WordPress OAuth token found` | Visit http://localhost:5000/oauth/start to authorize |
 | `OAuth token is invalid or revoked` | Re-authorize at http://localhost:5000/oauth/start |
-| `Email sent: False` | Check Gmail App Password in `.env` — must be 16-char app password, not account password |
+| `Email sent: False` | Check Gmail App Password — run `python scripts/migrate_secrets.py --verify` to confirm EMAIL_PASSWORD is set |
 | `No new articles found` | Normal if workflow already ran today — articles are deduplicated across runs |
 | Langfuse connection errors | Verify Docker is running: `docker compose ps` |
 | `Workflow Skipped` | Check `skip_reason` — either no new articles or no relevant summaries |

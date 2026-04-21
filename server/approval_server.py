@@ -23,6 +23,7 @@ from models.inputs.wordpress_publish_input import WordPressPublishInput
 from server.dashboard import dashboard_bp
 from tools.wordpress_publish_tool import WordPressPublishTool
 from utils.logger.logger import setup_logger
+from utils.secrets import get_secret
 
 load_dotenv()
 logger = setup_logger(__name__)
@@ -31,7 +32,7 @@ SCHEDULER_CONFIG_PATH = 'config/scheduler.yaml'
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
 app = Flask(__name__)
-app.secret_key = os.getenv('APPROVAL_SECRET_KEY', 'dev-secret-key')
+app.secret_key = get_secret('APPROVAL_SECRET_KEY') or 'dev-secret-key'
 app.register_blueprint(dashboard_bp)
 memory = Memory()
 
@@ -63,7 +64,7 @@ _approval_expiry_seconds = _orch_config['approval']['expiry_hours'] * 3600
 
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-_approval_serializer = URLSafeTimedSerializer(os.getenv('APPROVAL_SECRET_KEY'))
+_approval_serializer = URLSafeTimedSerializer(get_secret('APPROVAL_SECRET_KEY'))
 
 
 @app.after_request
@@ -80,10 +81,10 @@ def _set_security_headers(response: Any) -> Any:
     return response
 
 
-WP_CLIENT_ID = os.getenv('WORDPRESS_CLIENT_ID')
-WP_CLIENT_SECRET = os.getenv('WORDPRESS_CLIENT_SECRET')
+WP_CLIENT_ID = get_secret('WORDPRESS_CLIENT_ID')
+WP_CLIENT_SECRET = get_secret('WORDPRESS_CLIENT_SECRET')
 WP_REDIRECT_URI = (
-    os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000') + '/oauth/callback'
+    get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000' + '/oauth/callback'
 )
 WP_AUTHORIZE_URL = 'https://public-api.wordpress.com/oauth2/authorize'
 WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'
@@ -490,7 +491,9 @@ def start_scheduler() -> None:
 
 if __name__ == '__main__':
     start_scheduler()
-    port = int(os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000').split(':')[-1])
-    host = os.getenv('APPROVAL_BIND_HOST', '127.0.0.1')
+    port = int(
+        (get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000').split(':')[-1]
+    )
+    host = get_secret('APPROVAL_BIND_HOST') or '127.0.0.1'
     logger.info(f'Approval server starting on {host}:{port}')
     app.run(host=host, port=port, debug=False)

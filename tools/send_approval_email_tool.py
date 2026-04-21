@@ -1,7 +1,6 @@
 """Tool for sending approval emails and standalone failure notification emails."""
 
 import json
-import os
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.mime.multipart import MIMEMultipart
@@ -17,6 +16,7 @@ from models.inputs.send_approval_email_input import SendApprovalEmailInput
 from models.outputs.send_approval_email_output import SendApprovalEmailOutput
 from tools.base_tool import BaseTool
 from utils.logger.logger import setup_logger
+from utils.secrets import get_secret
 
 logger = setup_logger(__name__)
 
@@ -76,13 +76,13 @@ class SendApprovalEmailTool(BaseTool):
         self.expiry_hours: int = config['approval']['expiry_hours']
         self.memory = Memory()
 
-        self.secret_key: str | None = os.getenv('APPROVAL_SECRET_KEY')
-        self.base_url: str | None = os.getenv('APPROVAL_BASE_URL')
-        self.smtp_server: str | None = os.getenv('EMAIL_SMTP_SERVER')
-        self.smtp_port: int = int(os.getenv('EMAIL_SMTP_PORT', '587'))
-        self.email_from: str | None = os.getenv('EMAIL_FROM')
-        self.email_password: str | None = os.getenv('EMAIL_PASSWORD')
-        self.email_to: str | None = os.getenv('EMAIL_TO')
+        self.secret_key: str | None = get_secret('APPROVAL_SECRET_KEY')
+        self.base_url: str | None = get_secret('APPROVAL_BASE_URL')
+        self.smtp_server: str | None = get_secret('EMAIL_SMTP_SERVER')
+        self.smtp_port: int = int(get_secret('EMAIL_SMTP_PORT') or '587')
+        self.email_from: str | None = get_secret('EMAIL_FROM')
+        self.email_password: str | None = get_secret('EMAIL_PASSWORD')
+        self.email_to: str | None = get_secret('EMAIL_TO')
 
         self.serializer = URLSafeTimedSerializer(self.secret_key)
 
@@ -269,11 +269,11 @@ def send_failure_email(
         logger.info('Failure notification disabled — skipping email.')
         return
 
-    smtp_server = os.getenv('EMAIL_SMTP_SERVER')
-    smtp_port = int(os.getenv('EMAIL_SMTP_PORT', '587'))
-    email_from = os.getenv('EMAIL_FROM')
-    email_password = os.getenv('EMAIL_PASSWORD')
-    error_email_to = os.getenv('ERROR_EMAIL_TO', os.getenv('EMAIL_TO'))
+    smtp_server = get_secret('EMAIL_SMTP_SERVER')
+    smtp_port = int(get_secret('EMAIL_SMTP_PORT') or '587')
+    email_from = get_secret('EMAIL_FROM')
+    email_password = get_secret('EMAIL_PASSWORD')
+    error_email_to = get_secret('ERROR_EMAIL_TO') or get_secret('EMAIL_TO')
 
     timestamp = datetime.now(timezone.utc).strftime('%B %d, %Y at %I:%M %p UTC')
 
@@ -371,11 +371,11 @@ def send_drift_alert_email(alerts: list[dict]) -> None:
         logger.info('Failure notification disabled — skipping drift alert email.')
         return
 
-    smtp_server = os.getenv('EMAIL_SMTP_SERVER')
-    smtp_port = int(os.getenv('EMAIL_SMTP_PORT', '587'))
-    email_from = os.getenv('EMAIL_FROM')
-    email_password = os.getenv('EMAIL_PASSWORD')
-    error_email_to = os.getenv('ERROR_EMAIL_TO', os.getenv('EMAIL_TO'))
+    smtp_server = get_secret('EMAIL_SMTP_SERVER')
+    smtp_port = int(get_secret('EMAIL_SMTP_PORT') or '587')
+    email_from = get_secret('EMAIL_FROM')
+    email_password = get_secret('EMAIL_PASSWORD')
+    error_email_to = get_secret('ERROR_EMAIL_TO') or get_secret('EMAIL_TO')
 
     metrics_html = ''
     for alert in alerts:
@@ -441,11 +441,11 @@ def send_drift_recovery_email(recoveries: list[dict]) -> None:
         logger.info('Failure notification disabled — skipping drift recovery email.')
         return
 
-    smtp_server = os.getenv('EMAIL_SMTP_SERVER')
-    smtp_port = int(os.getenv('EMAIL_SMTP_PORT', '587'))
-    email_from = os.getenv('EMAIL_FROM')
-    email_password = os.getenv('EMAIL_PASSWORD')
-    error_email_to = os.getenv('ERROR_EMAIL_TO', os.getenv('EMAIL_TO'))
+    smtp_server = get_secret('EMAIL_SMTP_SERVER')
+    smtp_port = int(get_secret('EMAIL_SMTP_PORT') or '587')
+    email_from = get_secret('EMAIL_FROM')
+    email_password = get_secret('EMAIL_PASSWORD')
+    error_email_to = get_secret('ERROR_EMAIL_TO') or get_secret('EMAIL_TO')
 
     rows_html = ''.join(
         f'<tr><td><strong>{r["metric_name"]}</strong></td><td>{r["description"]}</td><td>{r["value"]}</td></tr>'

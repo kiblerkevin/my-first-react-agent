@@ -13,6 +13,10 @@ logging:
   default_level: INFO
   third_party_level: WARNING
 
+secrets:
+  provider: keychain  # "env" or "keychain"
+  keychain_service: "chicago-sports-recap"
+
 taxonomy:
   default_category: "Daily Recap"
   max_player_tags: 4
