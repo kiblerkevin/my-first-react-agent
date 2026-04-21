@@ -225,7 +225,7 @@
 
 **Tests:** Verify file permissions after creation (on non-Windows systems).
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 
 ---
 

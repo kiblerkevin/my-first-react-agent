@@ -667,3 +667,27 @@ class TestWALMode:
         result = session.execute(__import__('sqlalchemy').text('PRAGMA journal_mode')).fetchone()
         session.close()
         assert result[0] == 'wal'
+
+
+class TestFilePermissions:
+    """Tests for restrictive file permissions on database and backup files."""
+
+    def test_init_db_sets_600_permissions(self, tmp_path):
+        import stat
+
+        db_path = str(tmp_path / 'perms_test.db')
+        init_db(db_path)
+        mode = os.stat(db_path).st_mode & 0o777
+        assert mode == 0o600
+
+    def test_backup_sets_600_permissions(self, memory, tmp_path):
+        import stat
+
+        backup_dir = str(tmp_path / 'backup_perms')
+        memory.backup_path = backup_dir
+
+        result = memory.backup_database()
+
+        assert result is not None
+        mode = os.stat(result).st_mode & 0o777
+        assert mode == 0o600

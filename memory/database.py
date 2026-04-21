@@ -303,6 +303,11 @@ def init_db(db_path: str = 'data/articles.db') -> Engine:
         cursor.close()
 
     Base.metadata.create_all(engine)
+
+    # Restrict database file to owner-only access
+    if os.path.exists(db_path):
+        os.chmod(db_path, 0o600)
+
     return engine
 
 

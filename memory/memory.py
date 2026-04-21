@@ -988,6 +988,7 @@ class Memory:
             source.backup(dest)
             dest.close()
             source.close()
+            os.chmod(backup_file, 0o600)
             logger.info(f'Database backup created: {backup_file}')
             return backup_file
         except Exception as e:
