@@ -35,9 +35,7 @@ class DriftDetector:
         Returns:
             Dict with 'new_alerts' and 'recoveries' lists.
         """
-        max_window = max(
-            m.get('window', 5) for m in self.metrics_config.values()
-        )
+        max_window = max(m.get('window', 5) for m in self.metrics_config.values())
         data = self.memory.get_drift_metrics(window=max_window)
 
         results: dict[str, Any] = {'new_alerts': [], 'recoveries': []}
@@ -57,29 +55,31 @@ class DriftDetector:
                     threshold=config['threshold'],
                     run_id=run_id,
                 )
-                results['new_alerts'].append({
-                    'metric_name': metric_name,
-                    'value': evaluation['value'],
-                    'threshold': config['threshold'],
-                    'description': config['description'],
-                    'suggested_actions': config['suggested_actions'],
-                })
+                results['new_alerts'].append(
+                    {
+                        'metric_name': metric_name,
+                        'value': evaluation['value'],
+                        'threshold': config['threshold'],
+                        'description': config['description'],
+                        'suggested_actions': config['suggested_actions'],
+                    }
+                )
                 logger.warning(
-                    f"Drift detected: {metric_name} = {evaluation['value']} "
-                    f"(threshold: {config['threshold']})"
+                    f'Drift detected: {metric_name} = {evaluation["value"]} '
+                    f'(threshold: {config["threshold"]})'
                 )
 
             elif not is_breaching and has_alert:
                 # Recovery — resolve alert
                 self.memory.resolve_drift_alert(metric_name)
-                results['recoveries'].append({
-                    'metric_name': metric_name,
-                    'value': evaluation['value'],
-                    'description': self.metrics_config[metric_name]['description'],
-                })
-                logger.info(
-                    f"Drift recovered: {metric_name} = {evaluation['value']}"
+                results['recoveries'].append(
+                    {
+                        'metric_name': metric_name,
+                        'value': evaluation['value'],
+                        'description': self.metrics_config[metric_name]['description'],
+                    }
                 )
+                logger.info(f'Drift recovered: {metric_name} = {evaluation["value"]}')
 
         return results
 
@@ -99,8 +99,12 @@ class DriftDetector:
             'average_overall_score': self._eval_average_overall_score(runs),
             'consecutive_failures': self._eval_consecutive_failures(runs),
             'average_revision_tool_calls': self._eval_average_revision_tool_calls(runs),
-            'consecutive_low_completeness': self._eval_consecutive_low_criterion(runs, 'completeness'),
-            'consecutive_low_accuracy': self._eval_consecutive_low_criterion(runs, 'accuracy'),
+            'consecutive_low_completeness': self._eval_consecutive_low_criterion(
+                runs, 'completeness'
+            ),
+            'consecutive_low_accuracy': self._eval_consecutive_low_criterion(
+                runs, 'accuracy'
+            ),
             'approval_rejection_rate': self._eval_approval_rejection_rate(approvals),
             'consecutive_no_news_skips': self._eval_consecutive_no_news_skips(runs),
         }
@@ -197,7 +201,11 @@ class DriftDetector:
         config = self.metrics_config['consecutive_no_news_skips']
         count = 0
         for r in runs:
-            if r['status'] == 'skipped' and r.get('skip_reason') and 'No new articles' in r['skip_reason']:
+            if (
+                r['status'] == 'skipped'
+                and r.get('skip_reason')
+                and 'No new articles' in r['skip_reason']
+            ):
                 count += 1
             else:
                 break

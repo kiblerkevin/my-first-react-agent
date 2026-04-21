@@ -12,8 +12,18 @@ class TestDeduplicateArticlesTool:
 
     def test_removes_fuzzy_duplicates_same_team(self):
         articles = [
-            {'title': 'Cubs rally in 7th to beat Brewers', 'team': 'Cubs', 'url': 'a', 'relevance_score': 90},
-            {'title': 'Cubs rally in the 7th inning to beat Brewers', 'team': 'Cubs', 'url': 'b', 'relevance_score': 80},
+            {
+                'title': 'Cubs rally in 7th to beat Brewers',
+                'team': 'Cubs',
+                'url': 'a',
+                'relevance_score': 90,
+            },
+            {
+                'title': 'Cubs rally in the 7th inning to beat Brewers',
+                'team': 'Cubs',
+                'url': 'b',
+                'relevance_score': 80,
+            },
         ]
         result = self.tool.execute(DeduplicateArticlesInput(articles=articles))
         assert len(result.unique_articles) == 1
@@ -22,8 +32,18 @@ class TestDeduplicateArticlesTool:
 
     def test_keeps_different_articles(self):
         articles = [
-            {'title': 'Cubs win game', 'team': 'Cubs', 'url': 'a', 'relevance_score': 90},
-            {'title': 'White Sox lose badly', 'team': 'Cubs', 'url': 'b', 'relevance_score': 80},
+            {
+                'title': 'Cubs win game',
+                'team': 'Cubs',
+                'url': 'a',
+                'relevance_score': 90,
+            },
+            {
+                'title': 'White Sox lose badly',
+                'team': 'Cubs',
+                'url': 'b',
+                'relevance_score': 80,
+            },
         ]
         result = self.tool.execute(DeduplicateArticlesInput(articles=articles))
         assert len(result.unique_articles) == 2
@@ -31,8 +51,18 @@ class TestDeduplicateArticlesTool:
 
     def test_deduplicates_within_team_only(self):
         articles = [
-            {'title': 'Team wins big game today', 'team': 'Cubs', 'url': 'a', 'relevance_score': 90},
-            {'title': 'Team wins big game today', 'team': 'Sox', 'url': 'b', 'relevance_score': 80},
+            {
+                'title': 'Team wins big game today',
+                'team': 'Cubs',
+                'url': 'a',
+                'relevance_score': 90,
+            },
+            {
+                'title': 'Team wins big game today',
+                'team': 'Sox',
+                'url': 'b',
+                'relevance_score': 80,
+            },
         ]
         result = self.tool.execute(DeduplicateArticlesInput(articles=articles))
         assert len(result.unique_articles) == 2  # same title, different teams
@@ -43,7 +73,9 @@ class TestDeduplicateArticlesTool:
             {'title': 'Cubs won', 'team': 'Cubs', 'url': 'b', 'relevance_score': 80},
         ]
         # Very low threshold should match almost anything
-        result = self.tool.execute(DeduplicateArticlesInput(articles=articles, similarity_threshold=50.0))
+        result = self.tool.execute(
+            DeduplicateArticlesInput(articles=articles, similarity_threshold=50.0)
+        )
         assert len(result.unique_articles) == 1
 
     def test_empty_input(self):
@@ -53,8 +85,18 @@ class TestDeduplicateArticlesTool:
 
     def test_duplicate_groups_reported(self):
         articles = [
-            {'title': 'Cubs rally in 7th to beat Brewers', 'team': 'Cubs', 'url': 'a', 'relevance_score': 90},
-            {'title': 'Cubs rally in the 7th inning to beat Brewers', 'team': 'Cubs', 'url': 'b', 'relevance_score': 80},
+            {
+                'title': 'Cubs rally in 7th to beat Brewers',
+                'team': 'Cubs',
+                'url': 'a',
+                'relevance_score': 90,
+            },
+            {
+                'title': 'Cubs rally in the 7th inning to beat Brewers',
+                'team': 'Cubs',
+                'url': 'b',
+                'relevance_score': 80,
+            },
         ]
         result = self.tool.execute(DeduplicateArticlesInput(articles=articles))
         assert len(result.duplicate_groups) == 1

@@ -1,6 +1,5 @@
 """Tool for publishing blog posts to WordPress.com via OAuth2 API."""
 
-import os
 from typing import Any
 
 import requests
@@ -12,6 +11,7 @@ from models.outputs.wordpress_publish_output import WordPressPublishOutput
 from tools.base_tool import BaseTool
 from utils.http import rate_limited_request
 from utils.logger.logger import setup_logger
+from utils.secrets import get_secret
 
 logger = setup_logger(__name__)
 
@@ -66,7 +66,7 @@ class WordPressPublishTool(BaseTool):
             output_schema=self.model_fields['output_schema'].default,
         )
         wp_url = (
-            os.getenv('WORDPRESS_URL', '')
+            (get_secret('WORDPRESS_URL') or '')
             .replace('http://', '')
             .replace('https://', '')
         )

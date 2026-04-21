@@ -11,7 +11,9 @@ class TestFetchScoresTool:
 
     @patch('tools.fetch_scores_tool.Memory')
     @patch('tools.fetch_scores_tool.ESPNCollector')
-    def test_returns_scores_on_success(self, mock_collector_cls, mock_memory_cls, mock_scores):
+    def test_returns_scores_on_success(
+        self, mock_collector_cls, mock_memory_cls, mock_scores
+    ):
         mock_collector = MagicMock()
         mock_collector.collect_articles.return_value = mock_scores
         mock_collector_cls.return_value = mock_collector
@@ -41,7 +43,9 @@ class TestFetchScoresTool:
 
     @patch('tools.fetch_scores_tool.Memory')
     @patch('tools.fetch_scores_tool.ESPNCollector')
-    def test_persists_api_call_result_with_run_id(self, mock_collector_cls, mock_memory_cls, mock_scores):
+    def test_persists_api_call_result_with_run_id(
+        self, mock_collector_cls, mock_memory_cls, mock_scores
+    ):
         mock_collector = MagicMock()
         mock_collector.collect_articles.return_value = mock_scores
         mock_collector_cls.return_value = mock_collector
@@ -52,7 +56,9 @@ class TestFetchScoresTool:
         tool = FetchScoresTool()
         tool.execute(FetchScoresInput(run_id='test-run-123'))
 
-        mock_memory.save_api_call_result.assert_called_once_with(42, 'espn', 'success', 3)
+        mock_memory.save_api_call_result.assert_called_once_with(
+            42, 'espn', 'success', 3
+        )
 
 
 class TestFetchScoresToolEdgeCases:
@@ -71,4 +77,6 @@ class TestFetchScoresToolEdgeCases:
         tool = FetchScoresTool()
         tool.execute(FetchScoresInput(run_id='run-err'))
 
-        mock_memory.save_api_call_result.assert_called_once_with(5, 'espn', 'error', error='ESPN down')
+        mock_memory.save_api_call_result.assert_called_once_with(
+            5, 'espn', 'error', error='ESPN down'
+        )

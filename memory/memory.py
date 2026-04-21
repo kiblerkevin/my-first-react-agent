@@ -35,7 +35,7 @@ class Memory:
         db_path = config['database']['path']
         self.db_path = db_path
         self.retention_days = config['database'].get('retention_days', 30)
-        self.log_retention_days = config['database'].get('log_retention_days', 30)
+        self.log_retention_days = config.get('logging', {}).get('retention_days', 14)
         self.backup_path = config.get('backup', {}).get('path', 'data/backups')
         self.backup_retention_days = config.get('backup', {}).get('retention_days', 30)
         self.engine = init_db(db_path)
@@ -301,18 +301,21 @@ class Memory:
     def save_oauth_token(
         self, service: str, access_token: str, blog_id: str = None, blog_url: str = None
     ):
-        """Save an OAuth token for a service."""
+        """Save an OAuth token for a service, encrypted at rest."""
+        from utils.encryption import encrypt_token
+
+        encrypted = encrypt_token(access_token)
         session = get_session(self.engine)
         try:
             token = session.query(OAuthToken).filter_by(service=service).first()
             if token:
-                token.access_token = access_token
+                token.access_token = encrypted
                 token.blog_id = blog_id
                 token.blog_url = blog_url
             else:
                 token = OAuthToken(
                     service=service,
-                    access_token=access_token,
+                    access_token=encrypted,
                     blog_id=blog_id,
                     blog_url=blog_url,
                 )
@@ -323,11 +326,23 @@ class Memory:
             session.close()
 
     def get_oauth_token(self, service: str) -> str | None:
-        """Get the OAuth token for a service."""
+        """Get the OAuth token for a service, decrypting and auto-migrating if needed."""
+        from utils.encryption import decrypt_token, is_encrypted
+
         session = get_session(self.engine)
         try:
             token = session.query(OAuthToken).filter_by(service=service).first()
-            return token.access_token if token else None
+            if not token:
+                return None
+            plaintext = decrypt_token(token.access_token)
+            # Auto-migrate: if stored value was plaintext, encrypt it in place
+            if not is_encrypted(token.access_token):
+                from utils.encryption import encrypt_token
+
+                token.access_token = encrypt_token(plaintext)
+                session.commit()
+                logger.info(f'Auto-migrated plaintext OAuth token for {service}')
+            return plaintext
         finally:
             session.close()
 
@@ -988,6 +1003,7 @@ class Memory:
             source.backup(dest)
             dest.close()
             source.close()
+            os.chmod(backup_file, 0o600)
             logger.info(f'Database backup created: {backup_file}')
             return backup_file
         except Exception as e:
@@ -1051,9 +1067,7 @@ class Memory:
                     }
                     for r in runs
                 ],
-                'approvals': [
-                    {'status': a.status} for a in approvals
-                ],
+                'approvals': [{'status': a.status} for a in approvals],
             }
         finally:
             session.close()
@@ -1063,9 +1077,7 @@ class Memory:
         session = get_session(self.engine)
         try:
             alerts = (
-                session.query(DriftAlert)
-                .filter(DriftAlert.status == 'active')
-                .all()
+                session.query(DriftAlert).filter(DriftAlert.status == 'active').all()
             )
             return [
                 {
@@ -1082,7 +1094,11 @@ class Memory:
             session.close()
 
     def create_drift_alert(
-        self, metric_name: str, metric_value: float, threshold: float, run_id: str | None = None
+        self,
+        metric_name: str,
+        metric_value: float,
+        threshold: float,
+        run_id: str | None = None,
     ) -> int:
         """Create a new active drift alert."""
         session = get_session(self.engine)
@@ -1097,7 +1113,9 @@ class Memory:
             )
             session.add(alert)
             session.commit()
-            logger.info(f'Drift alert created: {metric_name} (value={metric_value}, threshold={threshold})')
+            logger.info(
+                f'Drift alert created: {metric_name} (value={metric_value}, threshold={threshold})'
+            )
             return alert.id
         finally:
             session.close()
@@ -1108,7 +1126,9 @@ class Memory:
         try:
             alert = (
                 session.query(DriftAlert)
-                .filter(DriftAlert.metric_name == metric_name, DriftAlert.status == 'active')
+                .filter(
+                    DriftAlert.metric_name == metric_name, DriftAlert.status == 'active'
+                )
                 .first()
             )
             if alert:
@@ -1125,7 +1145,9 @@ class Memory:
         try:
             return (
                 session.query(DriftAlert)
-                .filter(DriftAlert.metric_name == metric_name, DriftAlert.status == 'active')
+                .filter(
+                    DriftAlert.metric_name == metric_name, DriftAlert.status == 'active'
+                )
                 .count()
                 > 0
             )

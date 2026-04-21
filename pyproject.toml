@@ -25,8 +25,9 @@ ignore = [
 fixable = ["I", "F401", "W", "E"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["D"]
+"tests/*" = ["D", "E402", "SIM117"]
 "prompts/*" = ["D", "E501"]
+"server/approval_server.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "single"
@@ -92,5 +93,9 @@ module = [
     "langfuse.*",
     "apscheduler",
     "apscheduler.*",
+    "google",
+    "google.*",
+    "genai",
+    "genai.*",
 ]
 ignore_missing_imports = true

@@ -2,13 +2,17 @@
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from models.inputs.wordpress_publish_input import WordPressPublishInput
 from tools.wordpress_publish_tool import WordPressPublishTool
 
 
 def _make_tool():
-    with patch('tools.wordpress_publish_tool.Memory') as mock_mem_cls, \
-         patch.dict('os.environ', {'WORDPRESS_URL': 'test.wordpress.com'}):
+    with (
+        patch('tools.wordpress_publish_tool.Memory') as mock_mem_cls,
+        patch.dict('os.environ', {'WORDPRESS_URL': 'test.wordpress.com'}),
+    ):
         tool = WordPressPublishTool()
         tool.memory = mock_mem_cls.return_value
         return tool
@@ -44,15 +48,23 @@ class TestWordPressPublishTool:
         mock_get.return_value = MagicMock(status_code=200)
 
         mock_response = MagicMock(status_code=201)
-        mock_response.json.return_value = {'id': 42, 'link': 'https://test.wordpress.com/p/42', 'status': 'draft'}
+        mock_response.json.return_value = {
+            'id': 42,
+            'link': 'https://test.wordpress.com/p/42',
+            'status': 'draft',
+        }
         mock_response.raise_for_status = MagicMock()
         mock_request.return_value = mock_response
 
-        result = tool.execute(WordPressPublishInput(
-            title='Test Post', content='<p>Content</p>', excerpt='Excerpt',
-            categories=[{'name': 'Daily Recap', 'wordpress_id': 5}],
-            tags=[{'name': 'Cubs', 'wordpress_id': 10}],
-        ))
+        result = tool.execute(
+            WordPressPublishInput(
+                title='Test Post',
+                content='<p>Content</p>',
+                excerpt='Excerpt',
+                categories=[{'name': 'Daily Recap', 'wordpress_id': 5}],
+                tags=[{'name': 'Cubs', 'wordpress_id': 10}],
+            )
+        )
 
         assert result.post_id == 42
         assert result.status == 'draft'
@@ -77,15 +89,23 @@ class TestWordPressPublishTool:
         create_response.raise_for_status = MagicMock()
 
         post_response = MagicMock(status_code=201)
-        post_response.json.return_value = {'id': 1, 'link': 'http://x', 'status': 'draft'}
+        post_response.json.return_value = {
+            'id': 1,
+            'link': 'http://x',
+            'status': 'draft',
+        }
         post_response.raise_for_status = MagicMock()
 
         mock_request.side_effect = [search_response, create_response, post_response]
 
-        result = tool.execute(WordPressPublishInput(
-            title='Test', content='<p>X</p>',
-            categories=[{'name': 'New Cat'}], tags=[],
-        ))
+        result = tool.execute(
+            WordPressPublishInput(
+                title='Test',
+                content='<p>X</p>',
+                categories=[{'name': 'New Cat'}],
+                tags=[],
+            )
+        )
 
         assert result.categories_resolved == {'New Cat': 99}
         tool.memory.update_category_wordpress_id.assert_called_with('New Cat', 99)
@@ -94,22 +114,27 @@ class TestWordPressPublishTool:
     @patch('tools.wordpress_publish_tool.requests.get')
     def test_handles_http_error(self, mock_get, mock_request):
         import requests
+
         tool = _make_tool()
         tool.memory.get_oauth_token.return_value = 'valid_token'
         mock_get.return_value = MagicMock(status_code=200)
 
         error_response = MagicMock(status_code=500)
-        error_response.raise_for_status.side_effect = requests.exceptions.HTTPError(response=error_response)
+        error_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
+            response=error_response
+        )
         mock_request.return_value = error_response
 
-        result = tool.execute(WordPressPublishInput(
-            title='Test', content='<p>X</p>', categories=[], tags=[],
-        ))
+        result = tool.execute(
+            WordPressPublishInput(
+                title='Test',
+                content='<p>X</p>',
+                categories=[],
+                tags=[],
+            )
+        )
 
         assert result.error is not None
-
-
-import pytest
 
 
 class TestWordPressPublishToolEdgeCases:
@@ -128,15 +153,23 @@ class TestWordPressPublishToolEdgeCases:
         search_response.raise_for_status = MagicMock()
 
         post_response = MagicMock(status_code=201)
-        post_response.json.return_value = {'id': 1, 'link': 'http://x', 'status': 'draft'}
+        post_response.json.return_value = {
+            'id': 1,
+            'link': 'http://x',
+            'status': 'draft',
+        }
         post_response.raise_for_status = MagicMock()
 
         mock_request.side_effect = [search_response, post_response]
 
-        result = tool.execute(WordPressPublishInput(
-            title='Test', content='<p>X</p>',
-            categories=[], tags=[{'name': 'Cubs'}],
-        ))
+        result = tool.execute(
+            WordPressPublishInput(
+                title='Test',
+                content='<p>X</p>',
+                categories=[],
+                tags=[{'name': 'Cubs'}],
+            )
+        )
 
         assert result.tags_resolved == {'Cubs': 55}
         tool.memory.update_tag_wordpress_id.assert_called_with('Cubs', 55)
@@ -158,15 +191,23 @@ class TestWordPressPublishToolEdgeCases:
         create_response.raise_for_status = MagicMock()
 
         post_response = MagicMock(status_code=201)
-        post_response.json.return_value = {'id': 1, 'link': 'http://x', 'status': 'draft'}
+        post_response.json.return_value = {
+            'id': 1,
+            'link': 'http://x',
+            'status': 'draft',
+        }
         post_response.raise_for_status = MagicMock()
 
         mock_request.side_effect = [search_response, create_response, post_response]
 
-        result = tool.execute(WordPressPublishInput(
-            title='Test', content='<p>X</p>',
-            categories=[], tags=[{'name': 'NewTag'}],
-        ))
+        result = tool.execute(
+            WordPressPublishInput(
+                title='Test',
+                content='<p>X</p>',
+                categories=[],
+                tags=[{'name': 'NewTag'}],
+            )
+        )
 
         assert result.tags_resolved == {'NewTag': 77}
 
@@ -186,6 +227,7 @@ class TestWordPressPublishToolEdgeCases:
     @patch('tools.wordpress_publish_tool.requests.get')
     def test_handles_401_http_error(self, mock_get, mock_request):
         import requests as req
+
         tool = _make_tool()
         tool.memory.get_oauth_token.return_value = 'valid_token'
         mock_get.return_value = MagicMock(status_code=200)
@@ -197,9 +239,14 @@ class TestWordPressPublishToolEdgeCases:
             status_code=401,
         )
 
-        result = tool.execute(WordPressPublishInput(
-            title='Test', content='<p>X</p>', categories=[], tags=[],
-        ))
+        result = tool.execute(
+            WordPressPublishInput(
+                title='Test',
+                content='<p>X</p>',
+                categories=[],
+                tags=[],
+            )
+        )
 
         assert 'token may be revoked' in result.error
 
@@ -211,9 +258,14 @@ class TestWordPressPublishToolEdgeCases:
         mock_get.return_value = MagicMock(status_code=200)
         mock_request.side_effect = ConnectionError('Network failed')
 
-        result = tool.execute(WordPressPublishInput(
-            title='Test', content='<p>X</p>', categories=[], tags=[],
-        ))
+        result = tool.execute(
+            WordPressPublishInput(
+                title='Test',
+                content='<p>X</p>',
+                categories=[],
+                tags=[],
+            )
+        )
         assert result.error is not None
         assert 'Network failed' in result.error
 

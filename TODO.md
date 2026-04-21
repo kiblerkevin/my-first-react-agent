@@ -16,7 +16,7 @@
 - [ ] R4. Concurrent request protection — atomic approval status updates
 
 ### Agent
-- [ ] A3. Fallback model configuration — try primary model, fall back to secondary on failure
+- [x] A3. Fallback model configuration — Gemini fallback (Haiku → Flash, Sonnet → Pro) on API outage, auth failure, or rate limit exhaustion
 
 ---
 
@@ -57,42 +57,12 @@ pre-commit run --all     # run all hooks locally
 ### TS. Repeatable Testing Suite ✅
 
 **Implemented:**
-- 183 tests, 100% code coverage (enforced in CI)
+- 259 tests, 100% code coverage (enforced in CI)
 - All tools tested with mocked LLM and API responses
 - Memory layer tested with temporary SQLite databases
 - Acceptance tests verify checkpoint order, skip logic, resume, and failure email
 - Shared fixtures in `tests/conftest.py` with realistic mock data
 - GitHub Actions reusable workflow with configurable coverage threshold
-
-**Structure:**
-```
-tests/
-├── conftest.py                    # shared fixtures, mock factories
-├── tools/
-│   ├── test_fetch_articles.py     # 7 tests
-│   ├── test_fetch_scores.py       # 4 tests
-│   ├── test_summarize_article.py  # 5 tests
-│   ├── test_create_blog_draft.py  # 8 tests
-│   ├── test_evaluate_blog_post.py # 4 tests
-│   ├── test_deduplicate_articles.py # 7 tests
-│   ├── test_create_blog_taxonomy.py # 2 tests
-│   ├── test_send_approval_email.py  # 9 tests
-│   └── test_wordpress_publish.py    # 12 tests
-├── utils/
-│   ├── test_consolidate.py        # 7 tests
-│   ├── test_http.py               # 7 tests
-│   ├── test_relevance_scoring.py  # 5 tests
-│   ├── test_collectors.py         # 12 tests
-│   └── test_logger.py             # 1 test
-├── memory/
-│   └── test_memory.py             # 34 tests
-├── agent/
-│   ├── test_base_agent.py         # 20 tests
-│   ├── test_claude_client.py      # 9 tests
-│   └── test_revision_agent.py     # 8 tests
-└── workflow/
-    └── test_daily_workflow.py     # 8 acceptance tests
-```
 
 **Commands:**
 ```bash
@@ -192,6 +162,12 @@ mutmut results
 - Memory access via pre-loaded context; query_memory tool deferred to Phase 2 (full workflow agent)
 - Embeddings/cosine similarity deferred until memory layer matures
 - Dashboard authentication deferred — keep routes unauthenticated on localhost, add auth to dashboard blueprint when needed
+
+## Future State
+
+- **FastAPI Migration** — Migrate Flask approval server and dashboard to FastAPI for async support, native Pydantic validation, auto-generated OpenAPI docs, and type-safe routing. Trigger: when adding WebSocket dashboard updates, public API, or concurrent webhook handling.
+- **External Log Aggregation** — Add configurable log transport handler (CloudWatch, Datadog, ELK) for centralized search, alerting, and visualization. JSON log format is already compatible — just needs a shipper (Filebeat, CloudWatch agent, Fluentd) or a direct handler. Trigger: when moving beyond single-machine deployment.
+- **Security Hardening** — See `SECURITY_TODO.md` for remaining items (S1 secrets management, S2 token encryption, S4 Auth0 integration). Completed: S3, S5, S6, S7, S8, S9, S10.
 
 ## Notes
 

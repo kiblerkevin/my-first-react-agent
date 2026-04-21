@@ -1,7 +1,6 @@
 """Acceptance tests for workflow/daily_workflow.py."""
 
-import json
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -21,10 +20,22 @@ class TestDailyWorkflowHappyPath:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_happy_path_checkpoints_in_order(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_revision_cls,
-        mock_taxonomy_cls, mock_approval_cls, mock_memory_cls,
-        mock_scores, mock_articles, mock_summaries, mock_draft, mock_evaluation,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_revision_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_scores,
+        mock_articles,
+        mock_summaries,
+        mock_draft,
+        mock_evaluation,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
@@ -40,8 +51,11 @@ class TestDailyWorkflowHappyPath:
 
         # Articles
         articles_output = MagicMock(
-            articles=mock_articles, new_articles=mock_articles,
-            article_count=6, new_article_count=6, filtered_article_count=0,
+            articles=mock_articles,
+            new_articles=mock_articles,
+            article_count=6,
+            new_article_count=6,
+            filtered_article_count=0,
         )
         mock_articles_cls.return_value.execute.return_value = articles_output
 
@@ -67,7 +81,9 @@ class TestDailyWorkflowHappyPath:
         mock_revision_cls.return_value._last_tool_calls = 4
 
         # Taxonomy
-        taxonomy_output = MagicMock(categories=[{'name': 'Daily Recap'}], tags=[{'name': 'Cubs'}])
+        taxonomy_output = MagicMock(
+            categories=[{'name': 'Daily Recap'}], tags=[{'name': 'Cubs'}]
+        )
         mock_taxonomy_cls.return_value.execute.return_value = taxonomy_output
 
         # Approval
@@ -75,6 +91,7 @@ class TestDailyWorkflowHappyPath:
         mock_approval_cls.return_value.execute.return_value = approval_output
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow(max_articles_per_team=2)
 
         assert result['skipped'] is False
@@ -83,8 +100,13 @@ class TestDailyWorkflowHappyPath:
         # Verify checkpoints saved in order
         checkpoint_calls = [c[0][1] for c in mock_memory.save_checkpoint.call_args_list]
         assert checkpoint_calls == [
-            'fetch_scores', 'fetch_articles', 'deduplicate_articles',
-            'summarize_articles', 'draft_and_evaluate', 'create_taxonomy', 'send_approval_email',
+            'fetch_scores',
+            'fetch_articles',
+            'deduplicate_articles',
+            'summarize_articles',
+            'draft_and_evaluate',
+            'create_taxonomy',
+            'send_approval_email',
         ]
 
 
@@ -102,9 +124,17 @@ class TestDailyWorkflowNoNews:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_skips_on_zero_new_articles(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_taxonomy_cls,
-        mock_approval_cls, mock_memory_cls, mock_scores,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_scores,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
@@ -112,12 +142,19 @@ class TestDailyWorkflowNoNews:
         mock_memory.get_most_recent_rejection.return_value = None
         mock_memory_cls.return_value = mock_memory
 
-        mock_scores_cls.return_value.execute.return_value = MagicMock(scores=mock_scores, score_count=3)
+        mock_scores_cls.return_value.execute.return_value = MagicMock(
+            scores=mock_scores, score_count=3
+        )
         mock_articles_cls.return_value.execute.return_value = MagicMock(
-            articles=[], new_articles=[], article_count=0, new_article_count=0, filtered_article_count=0,
+            articles=[],
+            new_articles=[],
+            article_count=0,
+            new_article_count=0,
+            filtered_article_count=0,
         )
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow()
 
         assert result['skipped'] is True
@@ -139,10 +176,19 @@ class TestDailyWorkflowNoRelevant:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_skips_on_zero_relevant_summaries(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_revision_cls,
-        mock_taxonomy_cls, mock_approval_cls, mock_memory_cls,
-        mock_scores, mock_articles,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_revision_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_scores,
+        mock_articles,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
@@ -151,22 +197,34 @@ class TestDailyWorkflowNoRelevant:
         mock_memory.get_workflow_run_db_id.return_value = 1
         mock_memory_cls.return_value = mock_memory
 
-        mock_scores_cls.return_value.execute.return_value = MagicMock(scores=mock_scores, score_count=3)
-        mock_articles_cls.return_value.execute.return_value = MagicMock(
-            articles=mock_articles, new_articles=mock_articles,
-            article_count=6, new_article_count=6, filtered_article_count=0,
+        mock_scores_cls.return_value.execute.return_value = MagicMock(
+            scores=mock_scores, score_count=3
         )
-        mock_dedup_cls.return_value.execute.return_value = MagicMock(unique_articles=mock_articles, duplicate_count=0)
+        mock_articles_cls.return_value.execute.return_value = MagicMock(
+            articles=mock_articles,
+            new_articles=mock_articles,
+            article_count=6,
+            new_article_count=6,
+            filtered_article_count=0,
+        )
+        mock_dedup_cls.return_value.execute.return_value = MagicMock(
+            unique_articles=mock_articles, duplicate_count=0
+        )
 
         # All summaries marked irrelevant
         irrelevant = MagicMock()
-        irrelevant.model_dump.return_value = {'is_relevant': False, 'team': 'Cubs', 'event_type': 'other'}
+        irrelevant.model_dump.return_value = {
+            'is_relevant': False,
+            'team': 'Cubs',
+            'event_type': 'other',
+        }
         mock_summarize_tool = MagicMock()
         mock_summarize_tool.execute.return_value = irrelevant
         mock_summarize_tool.last_cache_hit = False
         mock_summarize_cls.return_value = mock_summarize_tool
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow()
 
         assert result['skipped'] is True
@@ -188,21 +246,50 @@ class TestDailyWorkflowResume:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_resumes_from_checkpoint(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_revision_cls,
-        mock_taxonomy_cls, mock_approval_cls, mock_memory_cls,
-        mock_scores, mock_articles, mock_summaries, mock_draft, mock_evaluation,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_revision_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_scores,
+        mock_articles,
+        mock_summaries,
+        mock_draft,
+        mock_evaluation,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
         # Simulate checkpoint with first 4 steps done
         mock_memory.get_checkpoint.return_value = {
-            'steps_completed': ['fetch_scores', 'fetch_articles', 'deduplicate_articles', 'summarize_articles'],
+            'steps_completed': [
+                'fetch_scores',
+                'fetch_articles',
+                'deduplicate_articles',
+                'summarize_articles',
+            ],
             'data': {
                 'fetch_scores': {'scores': mock_scores, 'score_count': 3},
-                'fetch_articles': {'articles': mock_articles, 'new_articles': mock_articles, 'article_count': 6, 'new_article_count': 6, 'filtered_article_count': 0},
-                'deduplicate_articles': {'unique_articles': mock_articles, 'duplicate_count': 0},
-                'summarize_articles': {'summaries': mock_summaries, 'relevant': mock_summaries},
+                'fetch_articles': {
+                    'articles': mock_articles,
+                    'new_articles': mock_articles,
+                    'article_count': 6,
+                    'new_article_count': 6,
+                    'filtered_article_count': 0,
+                },
+                'deduplicate_articles': {
+                    'unique_articles': mock_articles,
+                    'duplicate_count': 0,
+                },
+                'summarize_articles': {
+                    'summaries': mock_summaries,
+                    'relevant': mock_summaries,
+                },
             },
         }
         mock_memory.get_most_recent_rejection.return_value = None
@@ -217,10 +304,15 @@ class TestDailyWorkflowResume:
         }
         mock_revision_cls.return_value._last_tool_calls = 4
 
-        mock_taxonomy_cls.return_value.execute.return_value = MagicMock(categories=[], tags=[])
-        mock_approval_cls.return_value.execute.return_value = MagicMock(email_sent=True, token='tok', error=None)
+        mock_taxonomy_cls.return_value.execute.return_value = MagicMock(
+            categories=[], tags=[]
+        )
+        mock_approval_cls.return_value.execute.return_value = MagicMock(
+            email_sent=True, token='tok', error=None
+        )
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow(resume_run_id='existing-run-id')
 
         assert result['skipped'] is False
@@ -245,9 +337,17 @@ class TestDailyWorkflowFailure:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_sends_failure_email_on_exception(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_taxonomy_cls,
-        mock_approval_cls, mock_memory_cls, mock_failure_email,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_failure_email,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
@@ -255,7 +355,9 @@ class TestDailyWorkflowFailure:
         mock_memory.get_most_recent_rejection.return_value = None
         mock_memory_cls.return_value = mock_memory
 
-        mock_scores_cls.return_value.execute.side_effect = Exception('ESPN API exploded')
+        mock_scores_cls.return_value.execute.side_effect = Exception(
+            'ESPN API exploded'
+        )
 
         from workflow.daily_workflow import run_daily_workflow
 
@@ -282,37 +384,77 @@ class TestDailyWorkflowCheckpointAllSteps:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_resumes_with_all_steps_checkpointed(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_revision_cls,
-        mock_taxonomy_cls, mock_approval_cls, mock_memory_cls,
-        mock_scores, mock_articles, mock_summaries, mock_draft, mock_evaluation,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_revision_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_scores,
+        mock_articles,
+        mock_summaries,
+        mock_draft,
+        mock_evaluation,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
         mock_memory.get_checkpoint.return_value = {
             'steps_completed': [
-                'fetch_scores', 'fetch_articles', 'deduplicate_articles',
-                'summarize_articles', 'draft_and_evaluate', 'create_taxonomy', 'send_approval_email',
+                'fetch_scores',
+                'fetch_articles',
+                'deduplicate_articles',
+                'summarize_articles',
+                'draft_and_evaluate',
+                'create_taxonomy',
+                'send_approval_email',
             ],
             'data': {
                 'fetch_scores': {'scores': mock_scores, 'score_count': 3},
-                'fetch_articles': {'articles': mock_articles, 'new_articles': mock_articles, 'article_count': 6, 'new_article_count': 6, 'filtered_article_count': 0},
-                'deduplicate_articles': {'unique_articles': mock_articles, 'duplicate_count': 0},
-                'summarize_articles': {'summaries': mock_summaries, 'relevant': mock_summaries},
+                'fetch_articles': {
+                    'articles': mock_articles,
+                    'new_articles': mock_articles,
+                    'article_count': 6,
+                    'new_article_count': 6,
+                    'filtered_article_count': 0,
+                },
+                'deduplicate_articles': {
+                    'unique_articles': mock_articles,
+                    'duplicate_count': 0,
+                },
+                'summarize_articles': {
+                    'summaries': mock_summaries,
+                    'relevant': mock_summaries,
+                },
                 'draft_and_evaluate': {
                     'best_draft': mock_draft,
                     'best_evaluation': mock_evaluation,
                     'all_evaluations': [mock_evaluation],
                 },
-                'create_taxonomy': {'categories': [{'name': 'Daily Recap'}], 'tags': [{'name': 'Cubs'}]},
-                'send_approval_email': {'email_sent': True, 'token': 'tok123', 'error': None},
+                'create_taxonomy': {
+                    'categories': [{'name': 'Daily Recap'}],
+                    'tags': [{'name': 'Cubs'}],
+                },
+                'send_approval_email': {
+                    'email_sent': True,
+                    'token': 'tok123',
+                    'error': None,
+                },
             },
         }
-        mock_memory.get_most_recent_rejection.return_value = {'blog_title': 'Old', 'feedback': 'Fix title'}
+        mock_memory.get_most_recent_rejection.return_value = {
+            'blog_title': 'Old',
+            'feedback': 'Fix title',
+        }
         mock_memory.save_blog_draft.return_value = 1
         mock_memory_cls.return_value = mock_memory
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow(resume_run_id='full-checkpoint-run')
 
         assert result['skipped'] is False
@@ -336,10 +478,19 @@ class TestDailyWorkflowNoCheckpointFound:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_starts_fresh_when_no_checkpoint(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_revision_cls,
-        mock_taxonomy_cls, mock_approval_cls, mock_memory_cls,
-        mock_scores, mock_articles,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_revision_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_scores,
+        mock_articles,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
@@ -348,12 +499,19 @@ class TestDailyWorkflowNoCheckpointFound:
         mock_memory_cls.return_value = mock_memory
 
         # Make it skip early via no new articles
-        mock_scores_cls.return_value.execute.return_value = MagicMock(scores=mock_scores, score_count=3)
+        mock_scores_cls.return_value.execute.return_value = MagicMock(
+            scores=mock_scores, score_count=3
+        )
         mock_articles_cls.return_value.execute.return_value = MagicMock(
-            articles=[], new_articles=[], article_count=0, new_article_count=0, filtered_article_count=0,
+            articles=[],
+            new_articles=[],
+            article_count=0,
+            new_article_count=0,
+            filtered_article_count=0,
         )
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow(resume_run_id='nonexistent-run')
 
         assert result['skipped'] is True
@@ -374,10 +532,22 @@ class TestDailyWorkflowCacheHit:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_tracks_cache_hits(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_revision_cls,
-        mock_taxonomy_cls, mock_approval_cls, mock_memory_cls,
-        mock_scores, mock_articles, mock_summaries, mock_draft, mock_evaluation,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_revision_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_scores,
+        mock_articles,
+        mock_summaries,
+        mock_draft,
+        mock_evaluation,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
@@ -387,12 +557,19 @@ class TestDailyWorkflowCacheHit:
         mock_memory.save_blog_draft.return_value = 1
         mock_memory_cls.return_value = mock_memory
 
-        mock_scores_cls.return_value.execute.return_value = MagicMock(scores=mock_scores, score_count=3)
-        mock_articles_cls.return_value.execute.return_value = MagicMock(
-            articles=mock_articles, new_articles=mock_articles,
-            article_count=6, new_article_count=6, filtered_article_count=0,
+        mock_scores_cls.return_value.execute.return_value = MagicMock(
+            scores=mock_scores, score_count=3
         )
-        mock_dedup_cls.return_value.execute.return_value = MagicMock(unique_articles=mock_articles, duplicate_count=0)
+        mock_articles_cls.return_value.execute.return_value = MagicMock(
+            articles=mock_articles,
+            new_articles=mock_articles,
+            article_count=6,
+            new_article_count=6,
+            filtered_article_count=0,
+        )
+        mock_dedup_cls.return_value.execute.return_value = MagicMock(
+            unique_articles=mock_articles, duplicate_count=0
+        )
 
         # Summarize returns relevant with cache hit
         summary_output = MagicMock()
@@ -409,10 +586,15 @@ class TestDailyWorkflowCacheHit:
             'all_evaluations': [mock_evaluation],
         }
         mock_revision_cls.return_value._last_tool_calls = 2
-        mock_taxonomy_cls.return_value.execute.return_value = MagicMock(categories=[], tags=[])
-        mock_approval_cls.return_value.execute.return_value = MagicMock(email_sent=True, token='t', error=None)
+        mock_taxonomy_cls.return_value.execute.return_value = MagicMock(
+            categories=[], tags=[]
+        )
+        mock_approval_cls.return_value.execute.return_value = MagicMock(
+            email_sent=True, token='t', error=None
+        )
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow(max_articles_per_team=1)
 
         assert result['skipped'] is False
@@ -438,11 +620,25 @@ class TestDailyWorkflowDriftCheck:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_drift_check_called_after_success(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_revision_cls,
-        mock_taxonomy_cls, mock_approval_cls, mock_memory_cls,
-        mock_recovery_email, mock_alert_email, mock_detector_cls,
-        mock_scores, mock_articles, mock_summaries, mock_draft, mock_evaluation,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_revision_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_recovery_email,
+        mock_alert_email,
+        mock_detector_cls,
+        mock_scores,
+        mock_articles,
+        mock_summaries,
+        mock_draft,
+        mock_evaluation,
     ):
         mock_yaml.return_value = {}
         mock_memory = MagicMock()
@@ -452,12 +648,19 @@ class TestDailyWorkflowDriftCheck:
         mock_memory.save_blog_draft.return_value = 1
         mock_memory_cls.return_value = mock_memory
 
-        mock_scores_cls.return_value.execute.return_value = MagicMock(scores=mock_scores, score_count=3)
-        mock_articles_cls.return_value.execute.return_value = MagicMock(
-            articles=mock_articles, new_articles=mock_articles,
-            article_count=6, new_article_count=6, filtered_article_count=0,
+        mock_scores_cls.return_value.execute.return_value = MagicMock(
+            scores=mock_scores, score_count=3
         )
-        mock_dedup_cls.return_value.execute.return_value = MagicMock(unique_articles=mock_articles, duplicate_count=0)
+        mock_articles_cls.return_value.execute.return_value = MagicMock(
+            articles=mock_articles,
+            new_articles=mock_articles,
+            article_count=6,
+            new_article_count=6,
+            filtered_article_count=0,
+        )
+        mock_dedup_cls.return_value.execute.return_value = MagicMock(
+            unique_articles=mock_articles, duplicate_count=0
+        )
 
         summary_output = MagicMock()
         summary_output.model_dump.return_value = mock_summaries[0]
@@ -467,22 +670,37 @@ class TestDailyWorkflowDriftCheck:
         mock_summarize_cls.return_value = mock_summarize_tool
 
         mock_revision_cls.return_value.run.return_value = {
-            'best_draft': mock_draft, 'best_evaluation': mock_evaluation,
-            'all_drafts': [mock_draft], 'all_evaluations': [mock_evaluation],
+            'best_draft': mock_draft,
+            'best_evaluation': mock_evaluation,
+            'all_drafts': [mock_draft],
+            'all_evaluations': [mock_evaluation],
         }
         mock_revision_cls.return_value._last_tool_calls = 4
-        mock_taxonomy_cls.return_value.execute.return_value = MagicMock(categories=[], tags=[])
-        mock_approval_cls.return_value.execute.return_value = MagicMock(email_sent=True, token='t', error=None)
+        mock_taxonomy_cls.return_value.execute.return_value = MagicMock(
+            categories=[], tags=[]
+        )
+        mock_approval_cls.return_value.execute.return_value = MagicMock(
+            email_sent=True, token='t', error=None
+        )
 
         # Drift detector returns alerts
         mock_detector = MagicMock()
         mock_detector.check.return_value = {
-            'new_alerts': [{'metric_name': 'test', 'value': 1, 'threshold': 5, 'description': 'x', 'suggested_actions': []}],
+            'new_alerts': [
+                {
+                    'metric_name': 'test',
+                    'value': 1,
+                    'threshold': 5,
+                    'description': 'x',
+                    'suggested_actions': [],
+                }
+            ],
             'recoveries': [{'metric_name': 'other', 'value': 9, 'description': 'y'}],
         }
         mock_detector_cls.return_value = mock_detector
 
         from workflow.daily_workflow import run_daily_workflow
+
         run_daily_workflow(max_articles_per_team=1)
 
         mock_detector.check.assert_called_once()
@@ -502,10 +720,19 @@ class TestDailyWorkflowDriftCheck:
     @patch('workflow.daily_workflow.yaml.safe_load')
     @patch('builtins.open')
     def test_drift_check_error_does_not_crash_workflow(
-        self, mock_open, mock_yaml, mock_scores_cls, mock_articles_cls,
-        mock_dedup_cls, mock_summarize_cls, mock_taxonomy_cls,
-        mock_approval_cls, mock_memory_cls,
-        mock_recovery_email, mock_alert_email, mock_detector_cls,
+        self,
+        mock_open,
+        mock_yaml,
+        mock_scores_cls,
+        mock_articles_cls,
+        mock_dedup_cls,
+        mock_summarize_cls,
+        mock_taxonomy_cls,
+        mock_approval_cls,
+        mock_memory_cls,
+        mock_recovery_email,
+        mock_alert_email,
+        mock_detector_cls,
         mock_scores,
     ):
         mock_yaml.return_value = {}
@@ -515,12 +742,19 @@ class TestDailyWorkflowDriftCheck:
         mock_memory_cls.return_value = mock_memory
 
         # Skip early via no new articles
-        mock_scores_cls.return_value.execute.return_value = MagicMock(scores=mock_scores, score_count=3)
+        mock_scores_cls.return_value.execute.return_value = MagicMock(
+            scores=mock_scores, score_count=3
+        )
         mock_articles_cls.return_value.execute.return_value = MagicMock(
-            articles=[], new_articles=[], article_count=0, new_article_count=0, filtered_article_count=0,
+            articles=[],
+            new_articles=[],
+            article_count=0,
+            new_article_count=0,
+            filtered_article_count=0,
         )
 
         from workflow.daily_workflow import run_daily_workflow
+
         result = run_daily_workflow()
 
         # Skipped workflows don't run drift check (it's only after full success)

@@ -67,9 +67,13 @@ class TestRateLimitedRequest:
         mock_config.return_value = {'max_retries': 3, 'base_delay_seconds': 0.01}
         mock_request.return_value = MagicMock(status_code=200)
 
-        rate_limited_request('POST', 'https://example.com', json={'key': 'val'}, timeout=10)
+        rate_limited_request(
+            'POST', 'https://example.com', json={'key': 'val'}, timeout=10
+        )
 
-        mock_request.assert_called_once_with('POST', 'https://example.com', json={'key': 'val'}, timeout=10)
+        mock_request.assert_called_once_with(
+            'POST', 'https://example.com', json={'key': 'val'}, timeout=10
+        )
 
 
 class TestRateLimitedRequestEdgeCases:
@@ -78,7 +82,9 @@ class TestRateLimitedRequestEdgeCases:
     @patch('utils.http._get_config')
     @patch('utils.http.requests.request')
     @patch('utils.http.time.sleep')
-    def test_invalid_retry_after_uses_exponential_backoff(self, mock_sleep, mock_request, mock_config):
+    def test_invalid_retry_after_uses_exponential_backoff(
+        self, mock_sleep, mock_request, mock_config
+    ):
         mock_config.return_value = {'max_retries': 3, 'base_delay_seconds': 1.0}
         mock_429 = MagicMock(status_code=429, headers={'Retry-After': 'invalid-value'})
         mock_200 = MagicMock(status_code=200)
@@ -99,8 +105,15 @@ def test_get_config_loads_from_file():
     http_module._rate_limit_config = None
 
     try:
-        with patch('builtins.open'), \
-             patch('utils.http.yaml.safe_load', return_value={'rate_limiting': {'max_retries': 5, 'base_delay_seconds': 2.0}}):
+        with (
+            patch('builtins.open'),
+            patch(
+                'utils.http.yaml.safe_load',
+                return_value={
+                    'rate_limiting': {'max_retries': 5, 'base_delay_seconds': 2.0}
+                },
+            ),
+        ):
             config = http_module._get_config()
             assert config == {'max_retries': 5, 'base_delay_seconds': 2.0}
 

@@ -6,20 +6,25 @@ import sys
 import time
 from typing import Any
 
+import bleach
 import yaml
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template_string, request
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from memory.memory import Memory
 from models.inputs.wordpress_publish_input import WordPressPublishInput
+from server.auth import init_auth, require_role
 from server.dashboard import dashboard_bp
 from tools.wordpress_publish_tool import WordPressPublishTool
 from utils.logger.logger import setup_logger
+from utils.secrets import get_secret
 
 load_dotenv()
 logger = setup_logger(__name__)
@@ -28,13 +33,65 @@ SCHEDULER_CONFIG_PATH = 'config/scheduler.yaml'
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
 app = Flask(__name__)
+app.secret_key = get_secret('APPROVAL_SECRET_KEY') or 'dev-secret-key'
 app.register_blueprint(dashboard_bp)
 memory = Memory()
 
-WP_CLIENT_ID = os.getenv('WORDPRESS_CLIENT_ID')
-WP_CLIENT_SECRET = os.getenv('WORDPRESS_CLIENT_SECRET')
+# CSRF protection
+from flask_wtf.csrf import CSRFProtect
+
+csrf = CSRFProtect(app)
+init_auth(app)
+
+# Exempt auth routes from CSRF (Auth0 redirects)
+csrf.exempt('auth_login')
+csrf.exempt('auth_callback')
+csrf.exempt('auth_logout')
+
+# Rate limiting
+AUTH_CONFIG_PATH = 'config/auth.yaml'
+with open(AUTH_CONFIG_PATH, 'r') as _af:
+    _auth_config = yaml.safe_load(_af)
+_rl_config = _auth_config.get('rate_limiting', {})
+_rl_storage = _rl_config.get('storage', 'memory')
+_rl_storage_uri = 'memory://' if _rl_storage == 'memory' else _rl_storage
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[_rl_config.get('default', '60/minute')],
+    storage_uri=_rl_storage_uri,
+)
+limiter.limit(_rl_config.get('dashboard_api', '30/minute'))(dashboard_bp)
+
+# Approval token validation
+with open(ORCHESTRATION_CONFIG_PATH, 'r') as _f:
+    _orch_config = yaml.safe_load(_f)
+_approval_expiry_seconds = _orch_config['approval']['expiry_hours'] * 3600
+
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+_approval_serializer = URLSafeTimedSerializer(get_secret('APPROVAL_SECRET_KEY'))
+
+
+@app.after_request
+def _set_security_headers(response: Any) -> Any:
+    """Add security headers to all responses."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline'"
+    )
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
+
+WP_CLIENT_ID = get_secret('WORDPRESS_CLIENT_ID')
+WP_CLIENT_SECRET = get_secret('WORDPRESS_CLIENT_SECRET')
 WP_REDIRECT_URI = (
-    os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000') + '/oauth/callback'
+    get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000' + '/oauth/callback'
 )
 WP_AUTHORIZE_URL = 'https://public-api.wordpress.com/oauth2/authorize'
 WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'
@@ -69,6 +126,7 @@ REJECT_FORM_PAGE = """
 <h1 style="color: #dc3545;">❌ Reject Blog Post</h1>
 <p><strong>{{ title }}</strong></p>
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label for="feedback"><strong>Feedback (optional):</strong></label><br>
     <textarea name="feedback" id="feedback" rows="6"
               style="width: 100%; margin: 10px 0; padding: 10px; font-size: 14px;"
@@ -119,6 +177,7 @@ OAUTH_ERROR_PAGE = """
 
 
 @app.route('/health')
+@limiter.exempt
 def health() -> Any:
     """Return service health status."""
     return jsonify({'status': 'ok'})
@@ -128,6 +187,7 @@ def health() -> Any:
 
 
 @app.route('/oauth/start')
+@require_role('admin')
 def oauth_start() -> Any:
     """Redirect to WordPress OAuth authorization page."""
     params = {
@@ -186,15 +246,27 @@ def oauth_callback() -> Any:
 
     except Exception as e:
         logger.error(f'OAuth callback error: {e}')
-        return render_template_string(OAUTH_ERROR_PAGE, error=str(e)), 500
+        return render_template_string(
+            OAUTH_ERROR_PAGE,
+            error='An internal error occurred during authorization. Please try again.',
+        ), 500
 
 
 # --- Approval Routes ---
 
 
 @app.route('/approve/<token>')
+@limiter.limit(_rl_config.get('approval_endpoints', '10/minute'))
+@require_role('editor')
 def approve(token: str) -> Any:
     """Approve a blog post and trigger WordPress publish."""
+    try:
+        _approval_serializer.loads(
+            token, salt='approval', max_age=_approval_expiry_seconds
+        )
+    except (SignatureExpired, BadSignature):
+        return render_template_string(INVALID_TOKEN_PAGE), 404
+
     approval = memory.get_pending_approval(token)
     if not approval:
         return render_template_string(INVALID_TOKEN_PAGE), 404
@@ -266,12 +338,29 @@ def approve(token: str) -> Any:
             f'{publish_result.error}</p>'
         )
 
-    return render_template_string(APPROVED_PAGE, title=title, post_info=post_info)
+    return render_template_string(
+        APPROVED_PAGE,
+        title=title,
+        post_info=bleach.clean(
+            post_info,
+            tags=['p', 'a', 'strong'],
+            attributes={'a': ['href']},
+        ),
+    )
 
 
 @app.route('/reject/<token>', methods=['GET', 'POST'])
+@limiter.limit(_rl_config.get('approval_endpoints', '10/minute'))
+@require_role('editor')
 def reject(token: str) -> Any:
     """Show rejection form (GET) or process rejection with feedback (POST)."""
+    try:
+        _approval_serializer.loads(
+            token, salt='approval', max_age=_approval_expiry_seconds
+        )
+    except (SignatureExpired, BadSignature):
+        return render_template_string(INVALID_TOKEN_PAGE), 404
+
     approval = memory.get_pending_approval(token)
     if not approval:
         return render_template_string(INVALID_TOKEN_PAGE), 404
@@ -292,6 +381,7 @@ def reject(token: str) -> Any:
 
 
 @app.route('/status/<token>')
+@require_role('editor')
 def status(token: str) -> Any:
     """Show the current status of an approval request."""
     approval = memory.get_pending_approval(token)
@@ -412,6 +502,9 @@ def start_scheduler() -> None:
 
 if __name__ == '__main__':
     start_scheduler()
-    port = int(os.getenv('APPROVAL_BASE_URL', 'http://localhost:5000').split(':')[-1])
-    logger.info(f'Approval server starting on port {port}')
-    app.run(host='0.0.0.0', port=port, debug=False)
+    port = int(
+        (get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000').split(':')[-1]
+    )
+    host = get_secret('APPROVAL_BIND_HOST') or '127.0.0.1'
+    logger.info(f'Approval server starting on {host}:{port}')
+    app.run(host=host, port=port, debug=False)

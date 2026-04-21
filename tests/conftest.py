@@ -3,7 +3,6 @@
 import json
 import os
 import sys
-import tempfile
 
 import pytest
 
@@ -15,8 +14,18 @@ if os.path.basename(_project_root) == 'mutants':
     _project_root = os.path.dirname(_project_root)
 sys.path.insert(0, _project_root)
 
+import utils.secrets as secrets_module
 from memory.database import init_db
 from memory.memory import Memory
+from utils.secrets import EnvProvider, set_provider
+
+
+@pytest.fixture(autouse=True)
+def _use_env_secrets_provider():
+    """Ensure all tests use EnvProvider so os.environ patches work."""
+    set_provider(EnvProvider())
+    yield
+    secrets_module._provider_instance = None
 
 
 # --- Realistic mock data ---
@@ -270,9 +279,8 @@ def tmp_db(tmp_path):
 @pytest.fixture
 def memory(tmp_db, monkeypatch):
     """Memory instance pointed at the temp database."""
-    monkeypatch.setattr(
-        'memory.memory.DATABASE_CONFIG_PATH', '__nonexistent__'
-    )
+    monkeypatch.setattr('memory.memory.DATABASE_CONFIG_PATH', '__nonexistent__')
+    monkeypatch.setenv('APPROVAL_SECRET_KEY', 'test-secret-key-for-tests')
 
     class _TestMemory(Memory):
         def __init__(self, db_path):

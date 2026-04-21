@@ -42,6 +42,7 @@ class TestBaseAgent:
         agent, client = self._make_agent(max_tool_calls=1)
         agent.tool_call_count = 1  # simulate already at limit
         from agent.context_window import UserMessage
+
         agent.context.add(UserMessage(content='test'))
         result = agent.act()
         assert 'limit reached' in result.lower()
@@ -74,7 +75,10 @@ class TestBaseAgent:
         agent.act()
 
         call_kwargs = client.send_messages_with_tools.call_args[1]
-        assert call_kwargs.get('tool_choice') == {'type': 'tool', 'name': 'create_blog_draft'}
+        assert call_kwargs.get('tool_choice') == {
+            'type': 'tool',
+            'name': 'create_blog_draft',
+        }
 
 
 class TestBaseAgentToolUseLoop:
@@ -108,6 +112,7 @@ class TestBaseAgentToolUseLoop:
         agent.tools = {'test_tool': mock_tool}
 
         from agent.context_window import UserMessage
+
         agent.context.add(UserMessage(content='do something'))
         result = agent.act()
 
@@ -149,6 +154,7 @@ class TestBaseAgentToolUseLoop:
         agent.tools = {'tool_a': mock_tool, 'tool_b': mock_tool}
 
         from agent.context_window import UserMessage
+
         agent.context.add(UserMessage(content='test'))
         result = agent.act()
 
@@ -160,8 +166,13 @@ class TestBaseAgentToolUseLoop:
         context = ContextWindow(conversation_history=[])
         client = MagicMock()
         agent = BaseAgent(
-            context=context, claude_client=client, max_tool_calls=5,
-            revision_tracking={'draft_tool': 'create_draft', 'evaluate_tool': 'evaluate'},
+            context=context,
+            claude_client=client,
+            max_tool_calls=5,
+            revision_tracking={
+                'draft_tool': 'create_draft',
+                'evaluate_tool': 'evaluate',
+            },
         )
 
         draft_json = json.dumps({'title': 'Test', 'content': 'Draft content here'})
@@ -175,8 +186,13 @@ class TestBaseAgentToolUseLoop:
         context = ContextWindow(conversation_history=[])
         client = MagicMock()
         agent = BaseAgent(
-            context=context, claude_client=client, max_tool_calls=5,
-            revision_tracking={'draft_tool': 'create_draft', 'evaluate_tool': 'evaluate'},
+            context=context,
+            claude_client=client,
+            max_tool_calls=5,
+            revision_tracking={
+                'draft_tool': 'create_draft',
+                'evaluate_tool': 'evaluate',
+            },
         )
 
         eval_json = json.dumps({'improvement_suggestions': {'seo': ['Fix title']}})
@@ -189,8 +205,13 @@ class TestBaseAgentToolUseLoop:
         context = ContextWindow(conversation_history=[])
         client = MagicMock()
         agent = BaseAgent(
-            context=context, claude_client=client, max_tool_calls=5,
-            revision_tracking={'draft_tool': 'create_draft', 'evaluate_tool': 'evaluate'},
+            context=context,
+            claude_client=client,
+            max_tool_calls=5,
+            revision_tracking={
+                'draft_tool': 'create_draft',
+                'evaluate_tool': 'evaluate',
+            },
         )
         agent._last_draft_output = {'content': 'Previous draft HTML'}
         agent._last_eval_suggestions = {'seo': ['Shorten title']}
@@ -206,13 +227,19 @@ class TestBaseAgentToolUseLoop:
         context = ContextWindow(conversation_history=[])
         client = MagicMock()
         agent = BaseAgent(
-            context=context, claude_client=client, max_tool_calls=2,
-            revision_tracking={'draft_tool': 'create_draft', 'evaluate_tool': 'evaluate'},
+            context=context,
+            claude_client=client,
+            max_tool_calls=2,
+            revision_tracking={
+                'draft_tool': 'create_draft',
+                'evaluate_tool': 'evaluate',
+            },
         )
         agent.tool_call_count = 2
         agent._last_tool_name = 'create_draft'
 
         from agent.context_window import UserMessage
+
         agent.context.add(UserMessage(content='test'))
 
         # Should extend limit, not stop
@@ -260,6 +287,7 @@ class TestBaseAgentRemainingGaps:
         client.send_messages_with_tools.return_value = response
 
         from agent.context_window import UserMessage
+
         agent.context.add(UserMessage(content='test'))
         result = agent.act()
         assert result == ''
@@ -279,7 +307,8 @@ class TestBaseAgentRemainingGaps:
         context = ContextWindow(conversation_history=[])
         client = MagicMock()
         agent = BaseAgent(
-            context=context, claude_client=client,
+            context=context,
+            claude_client=client,
             revision_tracking={'draft_tool': 'draft', 'evaluate_tool': 'eval'},
         )
         # Should not raise
@@ -306,6 +335,7 @@ class TestBaseAgentRemainingGaps:
         agent = BaseAgent(context=context, claude_client=client)
 
         from agent.context_window import ToolUse
+
         tool_use = ToolUse(id='1', name='test_tool', input={'key': 'val'})
         agent._print_tool_use(tool_use)
 
@@ -320,20 +350,24 @@ class TestBaseAgentRemainingGaps:
         agent = BaseAgent(context=context, claude_client=client)
 
         from agent.context_window import ToolResult
+
         tool_result = ToolResult(tool_use_id='1', content='result data', is_error=False)
         agent._print_tool_result(tool_result)
 
         captured = capsys.readouterr()
         assert 'result data' in captured.out
 
-
     def test_inject_revision_context_non_draft_tool(self):
         """Line 229: returns input unchanged for non-draft tool."""
         context = ContextWindow(conversation_history=[])
         client = MagicMock()
         agent = BaseAgent(
-            context=context, claude_client=client,
-            revision_tracking={'draft_tool': 'create_draft', 'evaluate_tool': 'evaluate'},
+            context=context,
+            claude_client=client,
+            revision_tracking={
+                'draft_tool': 'create_draft',
+                'evaluate_tool': 'evaluate',
+            },
         )
         agent._last_draft_output = {'content': 'something'}
 
