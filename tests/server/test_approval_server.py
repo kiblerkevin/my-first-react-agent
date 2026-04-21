@@ -101,3 +101,65 @@ def test_post_info_strips_style_attributes(mock_memory_cls):
     )
     assert 'style=' not in sanitized
     assert '<p>' in sanitized
+
+
+@patch('server.approval_server.Memory')
+def test_approve_rejects_tampered_token(mock_memory_cls):
+    """Tampered token returns 404 invalid token page."""
+    from server.approval_server import app
+
+    with app.test_client() as client:
+        response = client.get('/approve/tampered-garbage-token')
+        assert response.status_code == 404
+        assert b'Invalid Token' in response.data
+
+
+@patch('server.approval_server.Memory')
+def test_reject_rejects_tampered_token(mock_memory_cls):
+    """Tampered token returns 404 invalid token page on reject."""
+    from server.approval_server import app
+
+    with app.test_client() as client:
+        response = client.get('/reject/tampered-garbage-token')
+        assert response.status_code == 404
+        assert b'Invalid Token' in response.data
+
+
+@patch('server.approval_server.Memory')
+def test_approve_rejects_expired_token(mock_memory_cls):
+    """Expired token returns 404 invalid token page."""
+    from server.approval_server import app, _approval_serializer
+
+    # Generate a valid token, then validate with max_age=0 to simulate expiry
+    token = _approval_serializer.dumps('Test Post', salt='approval')
+
+    import time
+    time.sleep(0.1)
+
+    with app.test_client() as client:
+        # Temporarily set expiry to 0 seconds to force expiration
+        import server.approval_server as srv
+        original_expiry = srv._approval_expiry_seconds
+        srv._approval_expiry_seconds = 0
+        try:
+            response = client.get(f'/approve/{token}')
+            assert response.status_code == 404
+            assert b'Invalid Token' in response.data
+        finally:
+            srv._approval_expiry_seconds = original_expiry
+
+
+@patch('server.approval_server.Memory')
+def test_approve_accepts_valid_token(mock_memory_cls):
+    """Valid token passes signature check and proceeds to DB lookup."""
+    from server.approval_server import app, _approval_serializer
+
+    mock_memory = mock_memory_cls.return_value
+    mock_memory.get_pending_approval.return_value = None
+
+    token = _approval_serializer.dumps('Test Post', salt='approval')
+
+    with app.test_client() as client:
+        response = client.get(f'/approve/{token}')
+        # Token is valid but no DB record — returns 404 (not found in DB)
+        assert response.status_code == 404

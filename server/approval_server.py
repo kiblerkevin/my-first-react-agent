@@ -32,6 +32,15 @@ app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
 memory = Memory()
 
+# Approval token validation
+with open(ORCHESTRATION_CONFIG_PATH, 'r') as _f:
+    _orch_config = yaml.safe_load(_f)
+_approval_expiry_seconds = _orch_config['approval']['expiry_hours'] * 3600
+
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+_approval_serializer = URLSafeTimedSerializer(os.getenv('APPROVAL_SECRET_KEY'))
+
 
 @app.after_request
 def _set_security_headers(response: Any) -> Any:
@@ -210,6 +219,11 @@ def oauth_callback() -> Any:
 @app.route('/approve/<token>')
 def approve(token: str) -> Any:
     """Approve a blog post and trigger WordPress publish."""
+    try:
+        _approval_serializer.loads(token, salt='approval', max_age=_approval_expiry_seconds)
+    except (SignatureExpired, BadSignature):
+        return render_template_string(INVALID_TOKEN_PAGE), 404
+
     approval = memory.get_pending_approval(token)
     if not approval:
         return render_template_string(INVALID_TOKEN_PAGE), 404
@@ -295,6 +309,11 @@ def approve(token: str) -> Any:
 @app.route('/reject/<token>', methods=['GET', 'POST'])
 def reject(token: str) -> Any:
     """Show rejection form (GET) or process rejection with feedback (POST)."""
+    try:
+        _approval_serializer.loads(token, salt='approval', max_age=_approval_expiry_seconds)
+    except (SignatureExpired, BadSignature):
+        return render_template_string(INVALID_TOKEN_PAGE), 404
+
     approval = memory.get_pending_approval(token)
     if not approval:
         return render_template_string(INVALID_TOKEN_PAGE), 404

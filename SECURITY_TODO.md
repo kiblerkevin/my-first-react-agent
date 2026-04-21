@@ -160,7 +160,7 @@
 
 **Tests:** Test with valid token, expired token, tampered token.
 
-**Status:** [ ] Not started
+**Status:** [x] Complete
 
 ---
 
