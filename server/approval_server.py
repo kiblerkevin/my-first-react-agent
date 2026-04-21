@@ -31,6 +31,17 @@ app = Flask(__name__)
 app.register_blueprint(dashboard_bp)
 memory = Memory()
 
+
+@app.after_request
+def _set_security_headers(response: Any) -> Any:
+    """Add security headers to all responses."""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['Content-Security-Policy'] = "default-src 'self'"
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
+
+
 WP_CLIENT_ID = os.getenv('WORDPRESS_CLIENT_ID')
 WP_CLIENT_SECRET = os.getenv('WORDPRESS_CLIENT_SECRET')
 WP_REDIRECT_URI = (
@@ -186,7 +197,10 @@ def oauth_callback() -> Any:
 
     except Exception as e:
         logger.error(f'OAuth callback error: {e}')
-        return render_template_string(OAUTH_ERROR_PAGE, error=str(e)), 500
+        return render_template_string(
+            OAUTH_ERROR_PAGE,
+            error='An internal error occurred during authorization. Please try again.',
+        ), 500
 
 
 # --- Approval Routes ---
