@@ -298,3 +298,14 @@ def test_health_exempt_from_rate_limit(mock_memory_cls):
         for _ in range(100):
             response = client.get('/health')
             assert response.status_code == 200
+
+
+@patch('server.approval_server.Memory')
+def test_root_redirects_to_wordpress(mock_memory_cls):
+    """Root path redirects to WordPress site."""
+    from server.approval_server import app
+
+    with app.test_client() as client:
+        response = client.get('/')
+        assert response.status_code == 302
+        assert 'chicagosportsrecap' in response.headers['Location']

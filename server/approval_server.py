@@ -32,7 +32,10 @@ logger = setup_logger(__name__)
 SCHEDULER_CONFIG_PATH = 'config/scheduler.yaml'
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = get_secret('APPROVAL_SECRET_KEY') or 'dev-secret-key'
 app.register_blueprint(dashboard_bp)
 memory = Memory()
@@ -174,6 +177,12 @@ OAUTH_ERROR_PAGE = """
 <p>{{ error }}</p>
 </body></html>
 """
+
+
+@app.route('/')
+def root() -> Any:
+    """Redirect to the WordPress site."""
+    return redirect(get_secret('WORDPRESS_URL') or 'https://chicagosportsrecap.wordpress.com')
 
 
 @app.route('/health')
