@@ -502,9 +502,7 @@ def start_scheduler() -> None:
 
 if __name__ == '__main__':
     start_scheduler()
-    port = int(
-        (get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000').split(':')[-1]
-    )
+    port = int(get_secret('APPROVAL_PORT') or '5000')
     host = get_secret('APPROVAL_BIND_HOST') or '127.0.0.1'
     logger.info(f'Approval server starting on {host}:{port}')
     app.run(host=host, port=port, debug=False)
