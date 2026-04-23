@@ -817,6 +817,45 @@ class Memory:
         finally:
             session.close()
 
+    def get_llm_stats(self, days: int = 30) -> dict:
+        """Get LLM usage statistics over the last days."""
+        import json as _json
+        from datetime import timedelta
+
+        session = get_session(self.engine)
+        try:
+            cutoff = datetime.utcnow() - timedelta(days=days)
+            runs = (
+                session.query(WorkflowRun)
+                .filter(WorkflowRun.started_at >= cutoff)
+                .all()
+            )
+
+            totals = {
+                'total_input_tokens': 0,
+                'total_output_tokens': 0,
+                'estimated_cost': 0.0,
+                'runs_tracked': 0,
+                'usage_by_tool': {},
+            }
+            for r in runs:
+                if r.total_input_tokens:
+                    totals['total_input_tokens'] += r.total_input_tokens
+                    totals['total_output_tokens'] += r.total_output_tokens or 0
+                    totals['estimated_cost'] += r.estimated_cost or 0.0
+                    totals['runs_tracked'] += 1
+                if r.usage_by_tool:
+                    for tool, usage in _json.loads(r.usage_by_tool).items():
+                        if tool not in totals['usage_by_tool']:
+                            totals['usage_by_tool'][tool] = {'input': 0, 'output': 0}
+                        totals['usage_by_tool'][tool]['input'] += usage.get('input', 0)
+                        totals['usage_by_tool'][tool]['output'] += usage.get('output', 0)
+
+            totals['estimated_cost'] = round(totals['estimated_cost'], 4)
+            return totals
+        finally:
+            session.close()
+
     def get_run_iterations(self, run_id: str) -> dict | None:
         """Get the iterations for a workflow run."""
         import json as _json

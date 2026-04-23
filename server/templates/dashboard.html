@@ -60,6 +60,12 @@
         <div class="quick-stats" id="quick-stats"></div>
     </div>
 
+    <!-- API Health Section -->
+    <div style="padding: 20px 30px 0;">
+        <h2 style="font-size: 16px; color: #666; margin-bottom: 12px;">🔌 API Health (30 days)</h2>
+    </div>
+    <div class="grid" id="api-section"></div>
+
     <div class="grid">
         <!-- Workflow Runs -->
         <div class="card full-width">
@@ -91,13 +97,7 @@
             </div>
         </div>
 
-        <!-- API Health -->
-        <div class="card">
-            <h2>🔌 API Health</h2>
-            <div class="chart-container">
-                <canvas id="api-chart"></canvas>
-            </div>
-        </div>
+
 
         <!-- Approval Rate -->
         <div class="card">
@@ -110,9 +110,7 @@
         <!-- Team Coverage -->
         <div class="card">
             <h2>🏟️ Team Coverage (30 days)</h2>
-            <div class="chart-container">
-                <canvas id="team-chart"></canvas>
-            </div>
+            <div id="team-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;"></div>
         </div>
 
         <!-- Source Distribution -->
@@ -213,20 +211,53 @@
             });
         }
 
-        async function loadApiChart() {
-            const data = await fetchJson('/dashboard/api/health');
-            if (charts.api) charts.api.destroy();
+        async function loadApiSection() {
+            const [health, llm] = await Promise.all([
+                fetchJson('/dashboard/api/health'),
+                fetchJson('/dashboard/api/llm')
+            ]);
+            const section = document.getElementById('api-section');
 
-            charts.api = new Chart(document.getElementById('api-chart'), {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.source),
-                    datasets: [
-                        { label: 'Success', data: data.map(d => d.success || 0), backgroundColor: '#28a745' },
-                        { label: 'Error', data: data.map(d => d.error || 0), backgroundColor: '#dc3545' }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true } } }
+            // Destroy existing pie charts
+            Object.keys(charts).filter(k => k.startsWith('api-')).forEach(k => { charts[k].destroy(); delete charts[k]; });
+
+            // One pie card per API source
+            const sources = ['espn', 'newsapi', 'serpapi'];
+            const sourceLabels = { espn: 'ESPN', newsapi: 'NewsAPI', serpapi: 'SerpAPI' };
+            let html = '';
+            sources.forEach(src => {
+                const d = health.find(h => h.source === src) || { success: 0, error: 0, total_articles: 0 };
+                html += `<div class="card">
+                    <h2>${sourceLabels[src] || src}</h2>
+                    <div class="chart-container" style="height:180px;"><canvas id="api-${src}"></canvas></div>
+                    <div class="metric" style="margin-top:8px;"><span class="label">Total Articles</span><span class="value">${d.total_articles || 0}</span></div>
+                </div>`;
+            });
+
+            // LLM stats card
+            const tracked = llm.runs_tracked || 0;
+            html += `<div class="card">
+                <h2>🤖 LLM Usage</h2>
+                <div class="metric"><span class="label">Runs Tracked</span><span class="value">${tracked}</span></div>
+                <div class="metric"><span class="label">Input Tokens</span><span class="value">${llm.total_input_tokens.toLocaleString()}</span></div>
+                <div class="metric"><span class="label">Output Tokens</span><span class="value">${llm.total_output_tokens.toLocaleString()}</span></div>
+                <div class="metric"><span class="label">Est. Cost</span><span class="value">$${llm.estimated_cost.toFixed(4)}</span></div>
+                ${!tracked ? '<div style="color:#999;font-size:12px;margin-top:8px;">Token tracking not yet populated.</div>' : ''}
+            </div>`;
+            section.innerHTML = html;
+
+            // Render pie charts
+            sources.forEach(src => {
+                const d = health.find(h => h.source === src) || { success: 0, error: 0 };
+                const s = d.success || 0, e = d.error || 0;
+                charts[`api-${src}`] = new Chart(document.getElementById(`api-${src}`), {
+                    type: 'pie',
+                    data: {
+                        labels: ['Success', 'Error'],
+                        datasets: [{ data: [s, e], backgroundColor: ['#28a745', '#dc3545'] }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+                });
             });
         }
 
@@ -247,19 +278,12 @@
             });
         }
 
-        async function loadTeamChart() {
+        async function loadTeamList() {
             const data = await fetchJson('/dashboard/api/teams');
-            if (charts.team) charts.team.destroy();
-
             const teams = Object.keys(data).sort((a, b) => data[b] - data[a]);
-            charts.team = new Chart(document.getElementById('team-chart'), {
-                type: 'bar',
-                data: {
-                    labels: teams.map(t => t.replace('Chicago ', '')),
-                    datasets: [{ label: 'Posts', data: teams.map(t => data[t]), backgroundColor: '#1a1a2e' }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' }
-            });
+            document.getElementById('team-list').innerHTML = teams.map(t =>
+                `<div class="metric"><span class="label">${t}</span><span class="value">${data[t]}</span></div>`
+            ).join('');
         }
 
         async function loadSourceChart() {
@@ -292,9 +316,9 @@
                 loadQuickStats(),
                 loadRuns(),
                 loadEvalChart(),
-                loadApiChart(),
+                loadApiSection(),
                 loadApprovalChart(),
-                loadTeamChart(),
+                loadTeamList(),
                 loadSourceChart(),
                 loadCacheStats()
             ]);

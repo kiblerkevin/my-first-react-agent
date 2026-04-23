@@ -193,6 +193,32 @@ class TestMemoryWorkflowOps:
         assert cache['cache_hits'] == 1
         assert cache['cache_misses'] == 2
 
+    def test_get_llm_stats(self, memory):
+        run_id = 'wf-llm-test'
+        memory.create_workflow_run(run_id)
+        memory.update_workflow_run(
+            run_id,
+            {
+                'status': 'success',
+                'total_input_tokens': 1000,
+                'total_output_tokens': 500,
+                'estimated_cost': 0.0025,
+                'usage_by_tool': {'create_blog_draft': {'input': 800, 'output': 400}},
+            },
+        )
+        stats = memory.get_llm_stats(30)
+        assert stats['total_input_tokens'] == 1000
+        assert stats['total_output_tokens'] == 500
+        assert stats['estimated_cost'] == 0.0025
+        assert stats['runs_tracked'] == 1
+        assert stats['usage_by_tool']['create_blog_draft']['input'] == 800
+
+    def test_get_llm_stats_empty(self, memory):
+        stats = memory.get_llm_stats(30)
+        assert stats['total_input_tokens'] == 0
+        assert stats['runs_tracked'] == 0
+        assert stats['usage_by_tool'] == {}
+
     def test_update_workflow_publish_result(self, memory):
         run_id = 'wf-publish-test'
         memory.create_workflow_run(run_id)

@@ -98,6 +98,12 @@ def api_sources() -> Response:
     return jsonify(memory.get_source_distribution(30))
 
 
+@dashboard_bp.route('/dashboard/api/llm')
+def api_llm() -> Response:
+    """Return LLM usage statistics over the last 30 days."""
+    return jsonify(memory.get_llm_stats(30))
+
+
 @dashboard_bp.route('/dashboard/api/cache')
 def api_cache() -> Response:
     """Return summary cache hit/miss statistics over the last 30 days."""
