@@ -294,3 +294,30 @@ class TestRevisionAgentExtractEdgeCases:
 
         results = agent._extract_results(context, 'response')
         assert results['all_drafts'] == []
+
+    @patch('agent.revision_agent.yaml.safe_load')
+    @patch('builtins.open')
+    def test_tied_scores_prefer_most_recent_draft(self, mock_open, mock_yaml):
+        """When evaluations tie, the most recent draft should be selected."""
+        mock_yaml.return_value = {
+            'revision_loop': {'criterion_floors': {}, 'max_tool_calls': 6}
+        }
+        agent = RevisionAgent()
+
+        draft1 = {'title': 'Draft 1', 'content': 'x' * 150, 'excerpt': '', 'teams_covered': []}
+        draft2 = {'title': 'Draft 2', 'content': 'y' * 150, 'excerpt': '', 'teams_covered': []}
+        eval1 = {'criteria_scores': {'accuracy': 8.5}, 'overall_score': 8.5}
+        eval2 = {'criteria_scores': {'accuracy': 8.5}, 'overall_score': 8.5}
+
+        context = ContextWindow(conversation_history=[])
+        for draft, evaluation in [(draft1, eval1), (draft2, eval2)]:
+            context.conversation_history.append(
+                ToolResultMessage(content=[ToolResult(tool_use_id='d', content=json.dumps(draft), is_error=False)])
+            )
+            context.conversation_history.append(
+                ToolResultMessage(content=[ToolResult(tool_use_id='e', content=json.dumps(evaluation), is_error=False)])
+            )
+
+        results = agent._extract_results(context, 'response')
+        assert results['best_draft']['title'] == 'Draft 2'
+        assert results['best_evaluation']['overall_score'] == 8.5
