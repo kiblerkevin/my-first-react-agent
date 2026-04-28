@@ -81,7 +81,7 @@ def _set_security_headers(response: Any) -> Any:
     response.headers['X-Frame-Options'] = 'DENY'
     response.headers['Content-Security-Policy'] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline'"
     )
     response.headers['X-XSS-Protection'] = '1; mode=block'

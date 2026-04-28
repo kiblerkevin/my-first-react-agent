@@ -32,7 +32,16 @@ function toggleIteration(id) {
 }
 
 function toggleDraft(id) {
-    document.getElementById(`draft-frame-${id}`).classList.toggle('hidden');
+    const frame = document.getElementById(`draft-frame-${id}`);
+    frame.classList.toggle('hidden');
+    if (!frame.classList.contains('hidden') && !frame.dataset.loaded) {
+        frame.dataset.loaded = 'true';
+        const content = (window.__draftContent || {})[id] || '';
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        doc.open();
+        doc.write(content);
+        doc.close();
+    }
 }
 
 async function loadIterations(runId, container) {
@@ -101,21 +110,9 @@ async function loadIterations(runId, container) {
                 html += `<div class="px-4 py-3 bg-gray-50 cursor-pointer text-sm font-semibold hover:bg-blue-50 border-b border-gray-300" onclick="toggleDraft('${iterId}')">📄 Toggle Draft Preview — ${draft.title || 'Untitled'}</div>`;
                 html += `<iframe class="hidden w-full h-[500px] border-none" id="draft-frame-${iterId}" sandbox="allow-same-origin"></iframe>`;
                 html += `</div>`;
-                html += `<script>
-                    (function() {
-                        const frame = document.getElementById('draft-frame-${iterId}');
-                        const observer = new MutationObserver(function() {
-                            if (!frame.classList.contains('hidden') && !frame.dataset.loaded) {
-                                frame.dataset.loaded = 'true';
-                                const doc = frame.contentDocument || frame.contentWindow.document;
-                                doc.open();
-                                doc.write(${JSON.stringify(draft.content)});
-                                doc.close();
-                            }
-                        });
-                        observer.observe(frame, { attributes: true, attributeFilter: ['class'] });
-                    })();
-                <\/script>`;
+                // Store content in JS for later retrieval
+                window.__draftContent = window.__draftContent || {};
+                window.__draftContent[iterId] = draft.content;
             } else {
                 html += `<p class="text-gray-400 mt-3">No draft content available for this attempt.</p>`;
             }

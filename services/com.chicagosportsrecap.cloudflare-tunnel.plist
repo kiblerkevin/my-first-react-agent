@@ -12,7 +12,7 @@
         <string>tunnel</string>
         <string>run</string>
         <!-- UPDATE: Replace with your tunnel name -->
-        <string>PLACEHOLDER_TUNNEL_NAME</string>
+        <string>Mac_Mini_Local</string>
     </array>
 
     <key>RunAtLoad</key>
