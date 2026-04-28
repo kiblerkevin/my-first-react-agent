@@ -1,0 +1,16 @@
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
+<h1 style="color: #dc3545;">❌ Reject Blog Post</h1>
+<p><strong>{{ title }}</strong></p>
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="feedback"><strong>Feedback (optional):</strong></label><br>
+    <textarea name="feedback" id="feedback" rows="6"
+              style="width: 100%; margin: 10px 0; padding: 10px; font-size: 14px;"
+              placeholder="What should be improved?"></textarea><br>
+    <button type="submit"
+            style="background-color: #dc3545; color: white; padding: 12px 30px;
+                   border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
+        Confirm Rejection
+    </button>
+</form>
+</body></html>

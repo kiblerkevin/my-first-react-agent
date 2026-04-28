@@ -1,0 +1,9 @@
+<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
+<h1>Approval Status</h1>
+<p><strong>Title:</strong> {{ approval.blog_title }}</p>
+<p><strong>Status:</strong> {{ approval.status }}</p>
+<p><strong>Created:</strong> {{ approval.created_at }}</p>
+<p><strong>Expires:</strong> {{ approval.expires_at }}</p>
+{% if approval.resolved_at %}<p><strong>Resolved:</strong> {{ approval.resolved_at }}</p>{% endif %}
+{% if approval.feedback %}<p><strong>Feedback:</strong> {{ approval.feedback }}</p>{% endif %}
+</body></html>
