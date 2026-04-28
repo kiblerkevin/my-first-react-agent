@@ -18,7 +18,7 @@
                 sleep 5
             done
             cd /Users/kevin/Projects/my-first-react-agent
-            /Users/kevin/Projects/my-first-react-agent/venv/bin/python server/approval_server.py
+            exec caffeinate -s /Users/kevin/Projects/my-first-react-agent/venv/bin/python server/approval_server.py
         </string>
     </array>
 
