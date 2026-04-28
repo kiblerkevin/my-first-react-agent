@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented here.
 
+## 2026-04-28
+
+### Added
+- **Tailwind CSS + Alpine.js frontend** — Standalone Tailwind CLI (no Node.js), Alpine.js via CDN. `scripts/install-tailwind.sh`, `scripts/build-css.sh`, `scripts/watch-css.sh`.
+- **Template inheritance** — `base.html` (dashboard pages with nav, Alpine.js) and `base_simple.html` (approval pages, minimal). All 10 templates now extend a base.
+- **Static JS files** — Extracted `dashboard.js` and `iterations.js` from inline `<script>` blocks into `server/static/js/`.
+
+### Changed
+- All inline CSS replaced with Tailwind utility classes across all templates.
+- Hamburger nav converted from vanilla JS `onclick` to Alpine.js `x-data`/`@click.outside`.
+- Dashboard badge classes use custom Tailwind `@utility` definitions (`badge-success`, `badge-failed`, etc.).
+
 ## 2026-04-27
 
 ### Fixed

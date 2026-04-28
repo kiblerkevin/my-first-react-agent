@@ -12,6 +12,7 @@
 | Linting | **MUST** pass `ruff check .` before commit | Run locally |
 | Type Check | **MUST** pass `mypy .` before commit | Run locally |
 | Tests | **MUST** pass `pytest tests/ --cov --cov-fail-under=100` | Run locally |
+| CSS Build | Run `bash scripts/build-css.sh` after template changes | Run locally |
 
 ## Before Writing Code
 
@@ -57,6 +58,7 @@ If any check fails, **fix the errors** before committing. Do not use `--no-verif
 - [ ] Code passes `ruff check .`
 - [ ] Code passes `mypy .`
 - [ ] Tests pass with 100% coverage
+- [ ] CSS rebuilt if templates changed (`bash scripts/build-css.sh`)
 - [ ] New functions have docstrings
 - [ ] New classes have docstrings
 - [ ] Follows patterns from [docs/agent-code-standards.md](docs/agent-code-standards.md)

@@ -1,4 +1,6 @@
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #6c757d;">Already Resolved</h1>
+{% extends "base_simple.html" %}
+{% block title %}Already Resolved{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-500 mb-4">Already Resolved</h1>
 <p>This approval request has already been <strong>{{ status }}</strong>.</p>
-</body></html>
+{% endblock %}

@@ -15,6 +15,7 @@
 | Linting | `ruff check . --fix` | ✅ Yes |
 | Type Check | `mypy .` | ✅ Yes |
 | Tests | `./venv/bin/python -m pytest tests/ --cov --cov-fail-under=100 -q` | ✅ Yes |
+| CSS Build | `bash scripts/build-css.sh` | ✅ After template changes |
 
 **You MUST fix all errors and maintain 100% test coverage before completing the task.**
 
@@ -27,6 +28,15 @@
 - Prompt changes → [../docs/prompt-engineering-conventions.md](../docs/prompt-engineering-conventions.md)
 - Error handling → [../docs/error-handling-conventions.md](../docs/error-handling-conventions.md)
 - Recent changes → [../CHANGELOG.md](../CHANGELOG.md)
+
+## Frontend Rules
+
+- Templates use **Jinja2 inheritance**: `base.html` (dashboard pages) or `base_simple.html` (approval pages)
+- CSS: **Tailwind CSS** via standalone CLI — use utility classes, not inline styles
+- Interactivity: **Alpine.js** (`x-data`, `x-show`, `@click`) — no jQuery, no vanilla `onclick` attributes
+- After editing templates: run `bash scripts/build-css.sh` to regenerate `output.css`
+- During development: run `bash scripts/watch-css.sh` for auto-rebuild on changes
+- Chart.js is loaded via CDN in `{% block head %}` only on pages that need it
 
 ## Code Patterns
 

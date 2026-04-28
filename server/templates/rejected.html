@@ -1,5 +1,7 @@
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #dc3545;">❌ Blog Post Rejected</h1>
+{% extends "base_simple.html" %}
+{% block title %}Blog Post Rejected{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold text-red-600 mb-4">❌ Blog Post Rejected</h1>
 <p><strong>{{ title }}</strong> has been rejected and archived.</p>
-{% if feedback %}<p><strong>Feedback:</strong> {{ feedback }}</p>{% endif %}
-</body></html>
+{% if feedback %}<p class="mt-3"><strong>Feedback:</strong> {{ feedback }}</p>{% endif %}
+{% endblock %}

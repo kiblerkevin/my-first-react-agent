@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Chicago Sports Recap{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+    <!-- Header -->
+    <header class="bg-[#1a1a2e] text-white px-8 py-5 flex justify-between items-center relative" x-data="{ navOpen: false }">
+        <div class="flex items-center">
+            <button @click="navOpen = !navOpen" class="mr-3 text-2xl leading-none px-2 py-1 hover:bg-white/10 rounded cursor-pointer" aria-label="Menu">☰</button>
+            <h1 class="text-xl font-semibold">{% block header_title %}🏈 Chicago Sports Recap{% endblock %}</h1>
+        </div>
+        <nav x-show="navOpen" @click.outside="navOpen = false" x-transition
+             class="absolute top-full left-0 bg-[#1a1a2e] min-w-[220px] shadow-lg z-50 rounded-br-lg">
+            <a href="/" class="block px-5 py-3 text-gray-400 hover:bg-white/10 hover:text-white text-sm border-b border-white/5">🏠 Home</a>
+            <a href="/dashboard" class="block px-5 py-3 text-gray-400 hover:bg-white/10 hover:text-white text-sm border-b border-white/5">📊 Dashboard</a>
+            <a href="/dashboard/iterations" class="block px-5 py-3 text-gray-400 hover:bg-white/10 hover:text-white text-sm">📝 Draft Iterations</a>
+        </nav>
+        {% block header_right %}{% endblock %}
+    </header>
+
+    {% block content %}{% endblock %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

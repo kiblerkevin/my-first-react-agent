@@ -215,3 +215,7 @@ data/articles.db
 .checkmarxIgnored
 
 logs/
+
+# Tailwind CSS
+tools/bin/
+server/static/css/output.css

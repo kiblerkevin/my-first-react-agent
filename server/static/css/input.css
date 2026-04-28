@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+/* Status badges */
+@utility badge-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+@utility badge-failed {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+@utility badge-skipped {
+    background-color: #fff3cd;
+    color: #856404;
+}
+@utility badge-running {
+    background-color: #cce5ff;
+    color: #004085;
+}

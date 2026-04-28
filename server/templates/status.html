@@ -1,9 +1,13 @@
-<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
-<h1>Approval Status</h1>
-<p><strong>Title:</strong> {{ approval.blog_title }}</p>
-<p><strong>Status:</strong> {{ approval.status }}</p>
-<p><strong>Created:</strong> {{ approval.created_at }}</p>
-<p><strong>Expires:</strong> {{ approval.expires_at }}</p>
-{% if approval.resolved_at %}<p><strong>Resolved:</strong> {{ approval.resolved_at }}</p>{% endif %}
-{% if approval.feedback %}<p><strong>Feedback:</strong> {{ approval.feedback }}</p>{% endif %}
-</body></html>
+{% extends "base_simple.html" %}
+{% block title %}Approval Status{% endblock %}
+{% block content %}
+<div class="text-left">
+    <h1 class="text-2xl font-bold mb-4">Approval Status</h1>
+    <p class="mb-1"><strong>Title:</strong> {{ approval.blog_title }}</p>
+    <p class="mb-1"><strong>Status:</strong> {{ approval.status }}</p>
+    <p class="mb-1"><strong>Created:</strong> {{ approval.created_at }}</p>
+    <p class="mb-1"><strong>Expires:</strong> {{ approval.expires_at }}</p>
+    {% if approval.resolved_at %}<p class="mb-1"><strong>Resolved:</strong> {{ approval.resolved_at }}</p>{% endif %}
+    {% if approval.feedback %}<p class="mb-1"><strong>Feedback:</strong> {{ approval.feedback }}</p>{% endif %}
+</div>
+{% endblock %}

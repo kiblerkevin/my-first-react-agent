@@ -1,16 +1,19 @@
-<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
-<h1 style="color: #dc3545;">❌ Reject Blog Post</h1>
-<p><strong>{{ title }}</strong></p>
-<form method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="feedback"><strong>Feedback (optional):</strong></label><br>
-    <textarea name="feedback" id="feedback" rows="6"
-              style="width: 100%; margin: 10px 0; padding: 10px; font-size: 14px;"
-              placeholder="What should be improved?"></textarea><br>
-    <button type="submit"
-            style="background-color: #dc3545; color: white; padding: 12px 30px;
-                   border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
-        Confirm Rejection
-    </button>
-</form>
-</body></html>
+{% extends "base_simple.html" %}
+{% block title %}Reject Blog Post{% endblock %}
+{% block content %}
+<div class="text-left">
+    <h1 class="text-2xl font-bold text-red-600 mb-4">❌ Reject Blog Post</h1>
+    <p class="mb-4"><strong>{{ title }}</strong></p>
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label for="feedback" class="font-semibold">Feedback (optional):</label><br>
+        <textarea name="feedback" id="feedback" rows="6"
+                  class="w-full mt-2 mb-3 p-3 text-sm border border-gray-300 rounded-md"
+                  placeholder="What should be improved?"></textarea><br>
+        <button type="submit"
+                class="bg-red-600 text-white px-8 py-3 rounded-md text-base font-medium cursor-pointer hover:bg-red-700">
+            Confirm Rejection
+        </button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Chicago Sports Recap{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/output.css') }}">
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans">
+    <div class="max-w-xl mx-auto py-12 px-6 text-center">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

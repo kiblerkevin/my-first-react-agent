@@ -1,339 +1,83 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chicago Sports Recap — Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-        .header { background: #1a1a2e; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center; position: relative; }
-        .header h1 { font-size: 22px; }
-        .header .status { font-size: 14px; color: #aaa; }
-        .hamburger { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 4px 8px; margin-right: 12px; line-height: 1; }
-        .hamburger:hover { background: rgba(255,255,255,0.1); border-radius: 4px; }
-        .nav-menu { display: none; position: absolute; top: 100%; left: 0; background: #1a1a2e; min-width: 220px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; border-radius: 0 0 8px 0; }
-        .nav-menu.open { display: block; }
-        .nav-menu a { display: block; padding: 12px 20px; color: #ccc; text-decoration: none; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .nav-menu a:hover { background: rgba(255,255,255,0.1); color: white; }
-        .header-left { display: flex; align-items: center; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 20px; padding: 20px 30px; }
-        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .card h2 { font-size: 16px; color: #666; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 8px; }
-        .card.full-width { grid-column: 1 / -1; }
-        .metric { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f0f0f0; }
-        .metric:last-child { border-bottom: none; }
-        .metric .label { color: #666; }
-        .metric .value { font-weight: 600; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-        .badge.success { background: #d4edda; color: #155724; }
-        .badge.skipped { background: #fff3cd; color: #856404; }
-        .badge.failed { background: #f8d7da; color: #721c24; }
-        .badge.running { background: #cce5ff; color: #004085; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th { text-align: left; padding: 8px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
-        td { padding: 8px; border-bottom: 1px solid #eee; }
-        .chart-container { position: relative; height: 250px; }
-        .quick-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
-        .stat-box { text-align: center; padding: 15px; background: #f8f9fa; border-radius: 6px; }
-        .stat-box .number { font-size: 28px; font-weight: 700; color: #1a1a2e; }
-        .stat-box .label { font-size: 12px; color: #666; margin-top: 4px; }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="header-left">
-            <button class="hamburger" onclick="document.getElementById('nav-menu').classList.toggle('open')" aria-label="Menu">☰</button>
-            <h1>🏈 Chicago Sports Recap — Dashboard</h1>
-        </div>
-        <div class="nav-menu" id="nav-menu">
-            <a href="/">🏠 Home</a>
-            <a href="/dashboard">📊 Dashboard</a>
-            <a href="/dashboard/iterations">📝 Draft Iterations</a>
-        </div>
-        <div class="status">Auto-refreshes every 5 minutes | <span id="last-updated"></span></div>
-    </div>
+{% extends "base.html" %}
 
-    <!-- Quick Stats -->
-    <div style="padding: 20px 30px 0;">
-        <div class="quick-stats" id="quick-stats"></div>
-    </div>
+{% block title %}Chicago Sports Recap — Dashboard{% endblock %}
+{% block header_title %}🏈 Chicago Sports Recap — Dashboard{% endblock %}
 
-    <div class="grid">
-        <!-- Workflow Runs -->
-        <div class="card full-width">
-            <h2>📋 Recent Workflow Runs</h2>
-            <div style="overflow-x: auto;">
-                <table id="runs-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Status</th>
-                            <th>Duration</th>
-                            <th>Score</th>
-                            <th>Articles</th>
-                            <th>Summaries</th>
-                            <th>Revisions</th>
-                            <th>Published</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-        </div>
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
 
-        <!-- Evaluation Trends -->
-        <div class="card">
-            <h2>📈 Evaluation Score Trends</h2>
-            <div class="chart-container">
-                <canvas id="eval-chart"></canvas>
-            </div>
-        </div>
+{% block header_right %}
+<div class="text-sm text-gray-400">Auto-refreshes every 5 minutes | <span id="last-updated"></span></div>
+{% endblock %}
 
+{% block content %}
+<!-- Quick Stats -->
+<div class="px-8 pt-5">
+    <div class="grid grid-cols-4 gap-4" id="quick-stats"></div>
+</div>
 
-
-        <!-- Approval Rate -->
-        <div class="card">
-            <h2>✅ Approval Rate</h2>
-            <div class="chart-container">
-                <canvas id="approval-chart"></canvas>
-            </div>
-        </div>
-
-        <!-- Team Coverage -->
-        <div class="card">
-            <h2>🏟️ Team Coverage (30 days)</h2>
-            <div id="team-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px;"></div>
-        </div>
-
-        <!-- Source Distribution -->
-        <div class="card">
-            <h2>📰 Article Source Distribution</h2>
-            <div class="chart-container">
-                <canvas id="source-chart"></canvas>
-            </div>
-        </div>
-
-        <!-- Cache Stats -->
-        <div class="card">
-            <h2>💾 Summary Cache Performance</h2>
-            <div id="cache-stats"></div>
+<div class="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] gap-5 px-8 py-5">
+    <!-- Workflow Runs -->
+    <div class="bg-white rounded-lg p-5 shadow-sm col-span-full">
+        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">📋 Recent Workflow Runs</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm" id="runs-table">
+                <thead>
+                    <tr>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Date</th>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Status</th>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Duration</th>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Score</th>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Articles</th>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Summaries</th>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Revisions</th>
+                        <th class="text-left p-2 bg-gray-50 border-b-2 border-gray-200">Published</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 
-    <!-- API Health Section -->
-    <div style="padding: 20px 30px 0;">
-        <h2 style="font-size: 16px; color: #666; margin-bottom: 12px;">🔌 API Health (30 days)</h2>
+    <!-- Evaluation Trends -->
+    <div class="bg-white rounded-lg p-5 shadow-sm">
+        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">📈 Evaluation Score Trends</h2>
+        <div class="relative h-[250px]"><canvas id="eval-chart"></canvas></div>
     </div>
-    <div class="grid" id="api-section"></div>
 
-    <script>
-        const charts = {};
+    <!-- Approval Rate -->
+    <div class="bg-white rounded-lg p-5 shadow-sm">
+        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">✅ Approval Rate</h2>
+        <div class="relative h-[250px]"><canvas id="approval-chart"></canvas></div>
+    </div>
 
-        function formatDate(iso) {
-            if (!iso) return '—';
-            const d = new Date(iso);
-            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-        }
+    <!-- Team Coverage -->
+    <div class="bg-white rounded-lg p-5 shadow-sm">
+        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">🏟️ Team Coverage (30 days)</h2>
+        <div class="grid grid-cols-2 gap-x-5" id="team-list"></div>
+    </div>
 
-        function formatDuration(seconds) {
-            if (!seconds) return '—';
-            if (seconds < 60) return `${Math.round(seconds)}s`;
-            return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`;
-        }
+    <!-- Source Distribution -->
+    <div class="bg-white rounded-lg p-5 shadow-sm">
+        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">📰 Article Source Distribution</h2>
+        <div class="relative h-[250px]"><canvas id="source-chart"></canvas></div>
+    </div>
 
-        function badgeHtml(status) {
-            return `<span class="badge ${status}">${status}</span>`;
-        }
+    <!-- Cache Stats -->
+    <div class="bg-white rounded-lg p-5 shadow-sm">
+        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">💾 Summary Cache Performance</h2>
+        <div id="cache-stats"></div>
+    </div>
+</div>
 
-        async function fetchJson(url) {
-            const res = await fetch(url);
-            return res.json();
-        }
+<!-- API Health Section -->
+<div class="px-8 pt-5">
+    <h2 class="text-sm font-medium text-gray-500 mb-3">🔌 API Health (30 days)</h2>
+</div>
+<div class="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] gap-5 px-8 pb-5" id="api-section"></div>
+{% endblock %}
 
-        async function loadQuickStats() {
-            const runs = await fetchJson('/dashboard/api/runs');
-            const approvals = await fetchJson('/dashboard/api/approvals');
-            const cache = await fetchJson('/dashboard/api/cache');
-
-            const successRuns = runs.filter(r => r.status === 'success');
-            const avgScore = successRuns.length > 0
-                ? (successRuns.reduce((s, r) => s + (r.overall_score || 0), 0) / successRuns.length).toFixed(1)
-                : '—';
-
-            document.getElementById('quick-stats').innerHTML = `
-                <div class="stat-box"><div class="number">${runs.length}</div><div class="label">Runs (30 days)</div></div>
-                <div class="stat-box"><div class="number">${avgScore}</div><div class="label">Avg Score</div></div>
-                <div class="stat-box"><div class="number">${approvals.approved || 0}</div><div class="label">Approved</div></div>
-                <div class="stat-box"><div class="number">${cache.hit_rate || 0}%</div><div class="label">Cache Hit Rate</div></div>
-            `;
-        }
-
-        async function loadRuns() {
-            const runs = await fetchJson('/dashboard/api/runs');
-            const tbody = document.querySelector('#runs-table tbody');
-            tbody.innerHTML = runs.map(r => `
-                <tr>
-                    <td>${formatDate(r.started_at)}</td>
-                    <td>${badgeHtml(r.status)}</td>
-                    <td>${formatDuration(r.duration_seconds)}</td>
-                    <td>${r.overall_score ? r.overall_score + '/10' : '—'}</td>
-                    <td>${r.articles_new ?? '—'} new / ${r.articles_fetched ?? '—'} total</td>
-                    <td>${r.summaries_count ?? '—'}</td>
-                    <td>${r.draft_attempts ?? '—'} drafts / ${r.revision_tool_calls ?? '—'} calls</td>
-                    <td>${r.publish_success === true ? '✅' : r.publish_success === false ? '❌' : '—'}</td>
-                </tr>
-            `).join('');
-        }
-
-        async function loadEvalChart() {
-            const data = await fetchJson('/dashboard/api/evaluations');
-            if (charts.eval) charts.eval.destroy();
-
-            const labels = data.map(d => d.date);
-            const criteria = ['accuracy', 'completeness', 'readability', 'seo'];
-            const colors = ['#28a745', '#007bff', '#ffc107', '#dc3545'];
-
-            charts.eval = new Chart(document.getElementById('eval-chart'), {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: criteria.map((c, i) => ({
-                        label: c,
-                        data: data.map(d => d[c] || null),
-                        borderColor: colors[i],
-                        tension: 0.3,
-                        fill: false
-                    }))
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: { y: { min: 0, max: 10 } } }
-            });
-        }
-
-        async function loadApiSection() {
-            const [health, llm] = await Promise.all([
-                fetchJson('/dashboard/api/health'),
-                fetchJson('/dashboard/api/llm')
-            ]);
-            const section = document.getElementById('api-section');
-
-            // Destroy existing pie charts
-            Object.keys(charts).filter(k => k.startsWith('api-')).forEach(k => { charts[k].destroy(); delete charts[k]; });
-
-            // One pie card per API source
-            const sources = ['espn', 'newsapi', 'serpapi'];
-            const sourceLabels = { espn: 'ESPN', newsapi: 'NewsAPI', serpapi: 'SerpAPI' };
-            let html = '';
-            sources.forEach(src => {
-                const d = health.find(h => h.source === src) || { success: 0, error: 0, total_articles: 0 };
-                html += `<div class="card">
-                    <h2>${sourceLabels[src] || src}</h2>
-                    <div class="chart-container" style="height:180px;"><canvas id="api-${src}"></canvas></div>
-                    <div class="metric" style="margin-top:8px;"><span class="label">Total Articles</span><span class="value">${d.total_articles || 0}</span></div>
-                </div>`;
-            });
-
-            // LLM stats card
-            const tracked = llm.runs_tracked || 0;
-            html += `<div class="card">
-                <h2>🤖 LLM Usage</h2>
-                <div class="metric"><span class="label">Runs Tracked</span><span class="value">${tracked}</span></div>
-                <div class="metric"><span class="label">Input Tokens</span><span class="value">${llm.total_input_tokens.toLocaleString()}</span></div>
-                <div class="metric"><span class="label">Output Tokens</span><span class="value">${llm.total_output_tokens.toLocaleString()}</span></div>
-                <div class="metric"><span class="label">Est. Cost</span><span class="value">$${llm.estimated_cost.toFixed(4)}</span></div>
-                ${!tracked ? '<div style="color:#999;font-size:12px;margin-top:8px;">Token tracking not yet populated.</div>' : ''}
-            </div>`;
-            section.innerHTML = html;
-
-            // Render pie charts
-            sources.forEach(src => {
-                const d = health.find(h => h.source === src) || { success: 0, error: 0 };
-                const s = d.success || 0, e = d.error || 0;
-                charts[`api-${src}`] = new Chart(document.getElementById(`api-${src}`), {
-                    type: 'pie',
-                    data: {
-                        labels: ['Success', 'Error'],
-                        datasets: [{ data: [s, e], backgroundColor: ['#28a745', '#dc3545'] }]
-                    },
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
-                });
-            });
-        }
-
-        async function loadApprovalChart() {
-            const data = await fetchJson('/dashboard/api/approvals');
-            if (charts.approval) charts.approval.destroy();
-
-            charts.approval = new Chart(document.getElementById('approval-chart'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['Approved', 'Rejected', 'Expired', 'Pending'],
-                    datasets: [{
-                        data: [data.approved || 0, data.rejected || 0, data.expired || 0, data.pending || 0],
-                        backgroundColor: ['#28a745', '#dc3545', '#6c757d', '#ffc107']
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-        }
-
-        async function loadTeamList() {
-            const data = await fetchJson('/dashboard/api/teams');
-            const teams = Object.keys(data).sort((a, b) => data[b] - data[a]);
-            document.getElementById('team-list').innerHTML = teams.map(t =>
-                `<div class="metric"><span class="label">${t}</span><span class="value">${data[t]}</span></div>`
-            ).join('');
-        }
-
-        async function loadSourceChart() {
-            const data = await fetchJson('/dashboard/api/sources');
-            if (charts.source) charts.source.destroy();
-
-            charts.source = new Chart(document.getElementById('source-chart'), {
-                type: 'pie',
-                data: {
-                    labels: Object.keys(data),
-                    datasets: [{ data: Object.values(data), backgroundColor: ['#007bff', '#ffc107', '#28a745', '#dc3545'] }]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
-        }
-
-        async function loadCacheStats() {
-            const data = await fetchJson('/dashboard/api/cache');
-            document.getElementById('cache-stats').innerHTML = `
-                <div class="metric"><span class="label">Total Summarizations</span><span class="value">${data.total}</span></div>
-                <div class="metric"><span class="label">Cache Hits</span><span class="value">${data.cache_hits}</span></div>
-                <div class="metric"><span class="label">Cache Misses</span><span class="value">${data.cache_misses}</span></div>
-                <div class="metric"><span class="label">Hit Rate</span><span class="value">${data.hit_rate}%</span></div>
-            `;
-        }
-
-        async function loadAll() {
-            document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
-            await Promise.all([
-                loadQuickStats(),
-                loadRuns(),
-                loadEvalChart(),
-                loadApiSection(),
-                loadApprovalChart(),
-                loadTeamList(),
-                loadSourceChart(),
-                loadCacheStats()
-            ]);
-        }
-
-        loadAll();
-        setInterval(loadAll, 5 * 60 * 1000);
-
-        document.addEventListener('click', function(e) {
-            const menu = document.getElementById('nav-menu');
-            const hamburger = document.querySelector('.hamburger');
-            if (!menu.contains(e.target) && !hamburger.contains(e.target)) {
-                menu.classList.remove('open');
-            }
-        });
-    </script>
-</body>
-</html>
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
