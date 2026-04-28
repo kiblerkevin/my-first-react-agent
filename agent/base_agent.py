@@ -77,27 +77,8 @@ class BaseAgent:
         Returns:
             Agent's text response, or a limit-reached message.
         """
-        if self.max_tool_calls and self.tool_call_count >= self.max_tool_calls:
-            if (
-                self._revision_config
-                and self._last_tool_name == self._revision_config.get('draft_tool')
-                and not self._limit_extended
-            ):
-                self._limit_extended = True
-                self.max_tool_calls += 1
-                logger.warning(
-                    f'Extended tool call limit to {self.max_tool_calls} '
-                    f'to allow final evaluation after draft.'
-                )
-            else:
-                logger.warning(
-                    f'Tool call limit reached ({self.max_tool_calls}). Stopping agent.'
-                )
-                return 'Tool call limit reached. Returning best available result.'
-
-        tool_choice: dict[str, str] | None = None
-        if self.force_first_tool and self.tool_call_count == 0:
-            tool_choice = {'type': 'tool', 'name': self.force_first_tool}
+        if self._is_over_budget():
+            return 'Tool call limit reached. Returning best available result.'
 
         response = self.claude_client.send_messages_with_tools(
             messages=[msg.model_dump() for msg in self.context.conversation_history],
@@ -109,10 +90,8 @@ class BaseAgent:
                 }
                 for tool in self.tools.values()
             ],
-            tool_choice=tool_choice,
+            tool_choice=self._get_tool_choice(),
         )
-
-        tool_use_id = 1
 
         has_tool_use = any(
             getattr(block, 'type', None) == 'tool_use'
@@ -120,69 +99,113 @@ class BaseAgent:
         )
 
         if has_tool_use:
-            for content_block in response.content:
-                if content_block.type == 'tool_use':
-                    if (
-                        self.max_tool_calls
-                        and self.tool_call_count >= self.max_tool_calls
-                    ):
-                        logger.warning(
-                            f'Tool call limit reached mid-response '
-                            f'({self.max_tool_calls}). Stopping.'
-                        )
-                        tool_result = ToolResult(
-                            tool_use_id=str(tool_use_id),
-                            content='Tool call limit reached. Please return your best result now.',
-                            is_error=True,
-                        )
-                        tool_result_message = ToolResultMessage(content=[tool_result])
-                        self.context.add(tool_result_message)
-                        return self.act()
-
-                    tool_input = dict(content_block.input)
-
-                    tool_input = self._inject_required_context(
-                        content_block.name, tool_input
-                    )
-                    tool_input = self._inject_revision_context(
-                        content_block.name, tool_input
-                    )
-
-                    tool_use = ToolUse(
-                        id=str(tool_use_id),
-                        name=content_block.name,
-                        input=tool_input,
-                    )
-                    tool_use_msg = ToolUseMessage(content=[tool_use])
-                    self.context.add(tool_use_msg)
-
-                    tool_result_response = self._execute_tool(
-                        tool_use.name, tool_use.input
-                    )
-                    self.tool_call_count += 1
-                    self._last_tool_name = content_block.name
-                    logger.info(
-                        f'Tool call {self.tool_call_count}/'
-                        f'{self.max_tool_calls or "∞"}: {tool_use.name}'
-                    )
-
-                    self._track_revision_output(
-                        content_block.name, tool_result_response
-                    )
-
-                    tool_result = ToolResult(
-                        tool_use_id=str(tool_use_id),
-                        content=tool_result_response,
-                        is_error=False,
-                    )
-                    tool_result_message = ToolResultMessage(content=[tool_result])
-                    self.context.add(tool_result_message)
-
-                    tool_use_id += 1
-
+            self._process_tool_blocks(response.content)
             return self.act()
 
-        for block in response.content or []:
+        return self._extract_text(response.content)
+
+    # --- Private helpers ---
+
+    def _is_over_budget(self) -> bool:
+        """Check if the tool call budget is exhausted, with one-time extension."""
+        if not self.max_tool_calls or self.tool_call_count < self.max_tool_calls:
+            return False
+
+        if (
+            self._revision_config
+            and self._last_tool_name == self._revision_config.get('draft_tool')
+            and not self._limit_extended
+        ):
+            self._limit_extended = True
+            self.max_tool_calls += 1
+            logger.warning(
+                f'Extended tool call limit to {self.max_tool_calls} '
+                f'to allow final evaluation after draft.'
+            )
+            return False
+
+        logger.warning(
+            f'Tool call limit reached ({self.max_tool_calls}). Stopping agent.'
+        )
+        return True
+
+    def _get_tool_choice(self) -> dict[str, str] | None:
+        """Return forced tool choice for the first call, or None."""
+        if self.force_first_tool and self.tool_call_count == 0:
+            return {'type': 'tool', 'name': self.force_first_tool}
+        return None
+
+    def _process_tool_blocks(self, content_blocks: list[Any]) -> None:
+        """Execute each tool_use block in the response and record results."""
+        tool_use_id = 1
+        for block in content_blocks:
+            if block.type != 'tool_use':
+                continue
+
+            if (
+                self.max_tool_calls
+                and self.tool_call_count >= self.max_tool_calls
+            ):
+                logger.warning(
+                    f'Tool call limit reached mid-response '
+                    f'({self.max_tool_calls}). Stopping.'
+                )
+                self.context.add(
+                    ToolResultMessage(
+                        content=[
+                            ToolResult(
+                                tool_use_id=str(tool_use_id),
+                                content='Tool call limit reached. Please return your best result now.',
+                                is_error=True,
+                            )
+                        ]
+                    )
+                )
+                return
+
+            tool_input = dict(block.input)
+            tool_input = self._inject_required_context(block.name, tool_input)
+            tool_input = self._inject_revision_context(block.name, tool_input)
+
+            self.context.add(
+                ToolUseMessage(
+                    content=[
+                        ToolUse(
+                            id=str(tool_use_id),
+                            name=block.name,
+                            input=tool_input,
+                        )
+                    ]
+                )
+            )
+
+            result_json = self._execute_tool(block.name, tool_input)
+            self.tool_call_count += 1
+            self._last_tool_name = block.name
+            logger.info(
+                f'Tool call {self.tool_call_count}/'
+                f'{self.max_tool_calls or "∞"}: {block.name}'
+            )
+
+            self._track_revision_output(block.name, result_json)
+
+            self.context.add(
+                ToolResultMessage(
+                    content=[
+                        ToolResult(
+                            tool_use_id=str(tool_use_id),
+                            content=result_json,
+                            is_error=False,
+                        )
+                    ]
+                )
+            )
+            tool_use_id += 1
+
+    @staticmethod
+    def _extract_text(content_blocks: list[Any]) -> str:
+        """Extract text from response content blocks."""
+        for block in content_blocks or []:
             if hasattr(block, 'text'):
                 return block.text
         return ''
@@ -290,22 +313,3 @@ class BaseAgent:
             return f'Tool {tool_name} not found.'
         except Exception as e:
             return f'Error executing tool {tool_name}: {e!s}'
-
-    def _print_tool_use(self, tool_use: ToolUse) -> None:
-        """Print tool invocation details for debugging.
-
-        Args:
-            tool_use: The tool use block to print.
-        """
-        print(f'Tool: {tool_use.name}\nInput: {tool_use.input}')
-
-    def _print_tool_result(self, tool_result: ToolResult) -> None:
-        """Print tool result details for debugging.
-
-        Args:
-            tool_result: The tool result block to print.
-        """
-        print(
-            f'Tool Result for Tool Use ID {tool_result.tool_use_id}:\n'
-            f'{tool_result.content}'
-        )

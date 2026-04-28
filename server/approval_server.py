@@ -12,9 +12,12 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template_string, request
+from flask import Flask, jsonify, redirect, render_template, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -32,8 +35,6 @@ logger = setup_logger(__name__)
 SCHEDULER_CONFIG_PATH = 'config/scheduler.yaml'
 ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
-from werkzeug.middleware.proxy_fix import ProxyFix
-
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = get_secret('APPROVAL_SECRET_KEY') or 'dev-secret-key'
@@ -41,8 +42,6 @@ app.register_blueprint(dashboard_bp)
 memory = Memory()
 
 # CSRF protection
-from flask_wtf.csrf import CSRFProtect
-
 csrf = CSRFProtect(app)
 init_auth(app)
 
@@ -72,8 +71,6 @@ with open(ORCHESTRATION_CONFIG_PATH, 'r') as _f:
     _orch_config = yaml.safe_load(_f)
 _approval_expiry_seconds = _orch_config['approval']['expiry_hours'] * 3600
 
-from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-
 _approval_serializer = URLSafeTimedSerializer(get_secret('APPROVAL_SECRET_KEY'))
 
 
@@ -98,85 +95,6 @@ WP_REDIRECT_URI = (
 )
 WP_AUTHORIZE_URL = 'https://public-api.wordpress.com/oauth2/authorize'
 WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'
-
-
-# --- HTML Templates ---
-
-APPROVED_PAGE = """
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #28a745;">✅ Blog Post Approved</h1>
-<p><strong>{{ title }}</strong> has been approved and will be published shortly.</p>
-{{ post_info|safe }}
-</body></html>
-"""
-
-ALREADY_RESOLVED_PAGE = """
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #6c757d;">Already Resolved</h1>
-<p>This approval request has already been <strong>{{ status }}</strong>.</p>
-</body></html>
-"""
-
-INVALID_TOKEN_PAGE = """
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #dc3545;">Invalid Token</h1>
-<p>This approval link is invalid or has expired.</p>
-</body></html>
-"""
-
-REJECT_FORM_PAGE = """
-<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
-<h1 style="color: #dc3545;">❌ Reject Blog Post</h1>
-<p><strong>{{ title }}</strong></p>
-<form method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label for="feedback"><strong>Feedback (optional):</strong></label><br>
-    <textarea name="feedback" id="feedback" rows="6"
-              style="width: 100%; margin: 10px 0; padding: 10px; font-size: 14px;"
-              placeholder="What should be improved?"></textarea><br>
-    <button type="submit"
-            style="background-color: #dc3545; color: white; padding: 12px 30px;
-                   border: none; border-radius: 5px; font-size: 16px; cursor: pointer;">
-        Confirm Rejection
-    </button>
-</form>
-</body></html>
-"""
-
-REJECTED_PAGE = """
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #dc3545;">❌ Blog Post Rejected</h1>
-<p><strong>{{ title }}</strong> has been rejected and archived.</p>
-{% if feedback %}<p><strong>Feedback:</strong> {{ feedback }}</p>{% endif %}
-</body></html>
-"""
-
-STATUS_PAGE = """
-<html><body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 50px;">
-<h1>Approval Status</h1>
-<p><strong>Title:</strong> {{ approval.blog_title }}</p>
-<p><strong>Status:</strong> {{ approval.status }}</p>
-<p><strong>Created:</strong> {{ approval.created_at }}</p>
-<p><strong>Expires:</strong> {{ approval.expires_at }}</p>
-{% if approval.resolved_at %}<p><strong>Resolved:</strong> {{ approval.resolved_at }}</p>{% endif %}
-{% if approval.feedback %}<p><strong>Feedback:</strong> {{ approval.feedback }}</p>{% endif %}
-</body></html>
-"""
-
-OAUTH_SUCCESS_PAGE = """
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #28a745;">✅ WordPress Authorized</h1>
-<p>OAuth token saved. The approval server can now publish to WordPress.</p>
-<p><strong>Blog:</strong> {{ blog_url }}</p>
-</body></html>
-"""
-
-OAUTH_ERROR_PAGE = """
-<html><body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-<h1 style="color: #dc3545;">OAuth Error</h1>
-<p>{{ error }}</p>
-</body></html>
-"""
 
 
 @app.route('/')
@@ -216,13 +134,11 @@ def oauth_callback() -> Any:
     error = request.args.get('error')
 
     if error:
-        return render_template_string(OAUTH_ERROR_PAGE, error=error), 400
+        return render_template('oauth_error.html', error=error), 400
 
     if not code:
         return (
-            render_template_string(
-                OAUTH_ERROR_PAGE, error='No authorization code received.'
-            ),
+            render_template('oauth_error.html', error='No authorization code received.'),
             400,
         )
 
@@ -251,12 +167,12 @@ def oauth_callback() -> Any:
         )
         logger.info(f'WordPress OAuth token saved for blog: {blog_url}')
 
-        return render_template_string(OAUTH_SUCCESS_PAGE, blog_url=blog_url)
+        return render_template('oauth_success.html', blog_url=blog_url)
 
     except Exception as e:
         logger.error(f'OAuth callback error: {e}')
-        return render_template_string(
-            OAUTH_ERROR_PAGE,
+        return render_template(
+            'oauth_error.html',
             error='An internal error occurred during authorization. Please try again.',
         ), 500
 
@@ -274,14 +190,14 @@ def approve(token: str) -> Any:
             token, salt='approval', max_age=_approval_expiry_seconds
         )
     except (SignatureExpired, BadSignature):
-        return render_template_string(INVALID_TOKEN_PAGE), 404
+        return render_template('invalid_token.html'), 404
 
     approval = memory.get_pending_approval(token)
     if not approval:
-        return render_template_string(INVALID_TOKEN_PAGE), 404
+        return render_template('invalid_token.html'), 404
 
     if approval['status'] != 'pending':
-        return render_template_string(ALREADY_RESOLVED_PAGE, status=approval['status'])
+        return render_template('already_resolved.html', status=approval['status'])
 
     memory.update_approval_status(token, 'approved')
     logger.info(f'Blog post approved: {approval["blog_title"]}')
@@ -303,24 +219,14 @@ def approve(token: str) -> Any:
             logger.error(f'WordPress publish error: {publish_result.error}')
         else:
             logger.info(f'Published to WordPress: post_id={publish_result.post_id}')
-            from memory.database import WorkflowRun as WR
-            from memory.database import get_session
-
-            session = get_session(memory.engine)
-            last_run = (
-                session.query(WR)
-                .filter_by(status='success')
-                .order_by(WR.id.desc())
-                .first()
-            )
-            if last_run:
+            runs = memory.get_recent_runs(1)
+            if runs and runs[0]['status'] == 'success':
                 memory.update_workflow_publish_result(
-                    last_run.run_id,
+                    runs[0]['run_id'],
                     publish_result.post_id,
                     publish_result.post_url,
                     True,
                 )
-            session.close()
     except Exception as e:
         logger.error(f'Error triggering WordPress publish: {e}')
 
@@ -347,8 +253,8 @@ def approve(token: str) -> Any:
             f'{publish_result.error}</p>'
         )
 
-    return render_template_string(
-        APPROVED_PAGE,
+    return render_template(
+        'approved.html',
         title=title,
         post_info=bleach.clean(
             post_info,
@@ -368,24 +274,24 @@ def reject(token: str) -> Any:
             token, salt='approval', max_age=_approval_expiry_seconds
         )
     except (SignatureExpired, BadSignature):
-        return render_template_string(INVALID_TOKEN_PAGE), 404
+        return render_template('invalid_token.html'), 404
 
     approval = memory.get_pending_approval(token)
     if not approval:
-        return render_template_string(INVALID_TOKEN_PAGE), 404
+        return render_template('invalid_token.html'), 404
 
     if approval['status'] != 'pending':
-        return render_template_string(ALREADY_RESOLVED_PAGE, status=approval['status'])
+        return render_template('already_resolved.html', status=approval['status'])
 
     if request.method == 'GET':
-        return render_template_string(REJECT_FORM_PAGE, title=approval['blog_title'])
+        return render_template('reject_form.html', title=approval['blog_title'])
 
     feedback: str | None = request.form.get('feedback', '').strip() or None
     memory.update_approval_status(token, 'rejected', feedback=feedback)
     logger.info(f'Blog post rejected: {approval["blog_title"]} (feedback: {feedback})')
 
-    return render_template_string(
-        REJECTED_PAGE, title=approval['blog_title'], feedback=feedback
+    return render_template(
+        'rejected.html', title=approval['blog_title'], feedback=feedback
     )
 
 
@@ -395,9 +301,9 @@ def status(token: str) -> Any:
     """Show the current status of an approval request."""
     approval = memory.get_pending_approval(token)
     if not approval:
-        return render_template_string(INVALID_TOKEN_PAGE), 404
+        return render_template('invalid_token.html'), 404
 
-    return render_template_string(STATUS_PAGE, approval=approval)
+    return render_template('status.html', approval=approval)
 
 
 # --- Background Jobs ---
