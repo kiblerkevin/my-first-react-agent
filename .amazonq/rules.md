@@ -14,14 +14,19 @@
 |-------|---------|----------|
 | Linting | `ruff check . --fix` | ✅ Yes |
 | Type Check | `mypy .` | ✅ Yes |
+| Tests | `./venv/bin/python -m pytest tests/ --cov --cov-fail-under=100 -q` | ✅ Yes |
 
-**You MUST fix all errors before completing the task.**
+**You MUST fix all errors and maintain 100% test coverage before completing the task.**
 
 ## Domain-Specific Rules
 
 - Docker changes → [../docs/docker-setup.md](../docs/docker-setup.md)
 - Routing changes → [../docs/routing-conventions.md](../docs/routing-conventions.md)
 - Database changes → [../docs/flask-sqlalchemy-patterns.md](../docs/flask-sqlalchemy-patterns.md)
+- Test changes → [../docs/testing-conventions.md](../docs/testing-conventions.md)
+- Prompt changes → [../docs/prompt-engineering-conventions.md](../docs/prompt-engineering-conventions.md)
+- Error handling → [../docs/error-handling-conventions.md](../docs/error-handling-conventions.md)
+- Recent changes → [../CHANGELOG.md](../CHANGELOG.md)
 
 ## Code Patterns
 

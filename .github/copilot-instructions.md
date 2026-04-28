@@ -11,6 +11,7 @@
 | Domain Context | See [docs/](docs/) for domain-specific rules | `docs/*.md` |
 | Linting | **MUST** pass `ruff check .` before commit | Run locally |
 | Type Check | **MUST** pass `mypy .` before commit | Run locally |
+| Tests | **MUST** pass `pytest tests/ --cov --cov-fail-under=100` | Run locally |
 
 ## Before Writing Code
 
@@ -18,6 +19,10 @@
    - Docker changes → [docs/docker-setup.md](docs/docker-setup.md)
    - Routing/web → [docs/routing-conventions.md](docs/routing-conventions.md)
    - Database code → [docs/flask-sqlalchemy-patterns.md](docs/flask-sqlalchemy-patterns.md)
+   - Tests → [docs/testing-conventions.md](docs/testing-conventions.md)
+   - Prompts → [docs/prompt-engineering-conventions.md](docs/prompt-engineering-conventions.md)
+   - Error handling → [docs/error-handling-conventions.md](docs/error-handling-conventions.md)
+   - Recent changes → [CHANGELOG.md](CHANGELOG.md)
 
 2. **Check existing patterns** in the codebase before adding new code
 
@@ -42,18 +47,21 @@
 # Always run these before committing
 ruff check . --fix
 mypy .
+./venv/bin/python -m pytest tests/ --cov --cov-fail-under=100 -q
 ```
 
-If either fails, **fix the errors** before committing. Do not use `--no-verify` or ignore errors.
+If any check fails, **fix the errors** before committing. Do not use `--no-verify` or ignore errors.
 
 ## Code Quality Checklist
 
 - [ ] Code passes `ruff check .`
 - [ ] Code passes `mypy .`
+- [ ] Tests pass with 100% coverage
 - [ ] New functions have docstrings
 - [ ] New classes have docstrings
 - [ ] Follows patterns from [docs/agent-code-standards.md](docs/agent-code-standards.md)
 - [ ] No TODO/FIXME comments left behind (unless tracking a known issue)
+- [ ] CHANGELOG.md updated if user-facing behavior changed
 
 ## Questions?
 
