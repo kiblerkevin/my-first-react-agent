@@ -77,8 +77,26 @@ async function loadEvalChart() {
     });
 }
 
+function renderLlmCard(title, llm) {
+    const tracked = llm.runs_tracked || 0;
+    let html = `<div class="bg-white rounded-lg p-5 shadow-sm">
+        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">${title}</h2>
+        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Runs Tracked</span><span class="font-semibold">${tracked}</span></div>
+        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Input Tokens</span><span class="font-semibold">${(llm.total_input_tokens || 0).toLocaleString()}</span></div>
+        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Output Tokens</span><span class="font-semibold">${(llm.total_output_tokens || 0).toLocaleString()}</span></div>
+        <div class="flex justify-between py-1.5"><span class="text-gray-500">Est. Cost</span><span class="font-semibold">$${(llm.estimated_cost || 0).toFixed(4)}</span></div>
+        ${!tracked ? '<div class="text-gray-400 text-xs mt-2">Token tracking not yet populated.</div>' : ''}
+    </div>`;
+    return html;
+}
+
 async function loadApiSection() {
-    const [health, llm] = await Promise.all([fetchJson('/dashboard/api/health'), fetchJson('/dashboard/api/llm')]);
+    const [health, llm, llmPrev, llmAvg] = await Promise.all([
+        fetchJson('/dashboard/api/health'),
+        fetchJson('/dashboard/api/llm'),
+        fetchJson('/dashboard/api/llm/previous-run'),
+        fetchJson('/dashboard/api/llm/weekly-avg'),
+    ]);
     const section = document.getElementById('api-section');
 
     Object.keys(charts).filter(k => k.startsWith('api-')).forEach(k => { charts[k].destroy(); delete charts[k]; });
@@ -95,15 +113,9 @@ async function loadApiSection() {
         </div>`;
     });
 
-    const tracked = llm.runs_tracked || 0;
-    html += `<div class="bg-white rounded-lg p-5 shadow-sm">
-        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">🤖 LLM Usage</h2>
-        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Runs Tracked</span><span class="font-semibold">${tracked}</span></div>
-        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Input Tokens</span><span class="font-semibold">${llm.total_input_tokens.toLocaleString()}</span></div>
-        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Output Tokens</span><span class="font-semibold">${llm.total_output_tokens.toLocaleString()}</span></div>
-        <div class="flex justify-between py-1.5"><span class="text-gray-500">Est. Cost</span><span class="font-semibold">$${llm.estimated_cost.toFixed(4)}</span></div>
-        ${!tracked ? '<div class="text-gray-400 text-xs mt-2">Token tracking not yet populated.</div>' : ''}
-    </div>`;
+    html += renderLlmCard('🤖 Previous Run LLM', llmPrev);
+    html += renderLlmCard('🤖 7-Run Avg LLM', llmAvg);
+    html += renderLlmCard('🤖 LLM Usage (30 days)', llm);
     section.innerHTML = html;
 
     sources.forEach(src => {

@@ -219,6 +219,70 @@ class TestMemoryWorkflowOps:
         assert stats['runs_tracked'] == 0
         assert stats['usage_by_tool'] == {}
 
+    def test_get_llm_stats_with_explicit_timestamps(self, memory):
+        run_id = 'wf-llm-ts-test'
+        memory.create_workflow_run(run_id)
+        memory.update_workflow_run(
+            run_id,
+            {
+                'status': 'success',
+                'steps_completed': [],
+                'total_input_tokens': 500,
+                'total_output_tokens': 200,
+                'estimated_cost': 0.001,
+            },
+        )
+        from_ts = datetime.utcnow() - timedelta(hours=1)
+        to_ts = datetime.utcnow() + timedelta(hours=1)
+        stats = memory.get_llm_stats(from_ts=from_ts, to_ts=to_ts)
+        assert stats['total_input_tokens'] == 500
+        assert stats['total_output_tokens'] == 200
+
+    def test_get_llm_stats_previous_run(self, memory):
+        run_id = 'wf-llm-prev'
+        memory.create_workflow_run(run_id)
+        memory.update_workflow_run(
+            run_id,
+            {
+                'status': 'success',
+                'steps_completed': [],
+                'total_input_tokens': 300,
+                'total_output_tokens': 100,
+                'estimated_cost': 0.002,
+            },
+        )
+        stats = memory.get_llm_stats_previous_run()
+        assert stats['total_input_tokens'] == 300
+
+    def test_get_llm_stats_previous_run_no_runs(self, memory):
+        stats = memory.get_llm_stats_previous_run()
+        assert stats['total_input_tokens'] == 0
+
+    def test_get_llm_stats_last_7_runs_avg(self, memory):
+        for i in range(3):
+            run_id = f'wf-llm-avg-{i}'
+            memory.create_workflow_run(run_id)
+            memory.update_workflow_run(
+                run_id,
+                {
+                    'status': 'success',
+                    'steps_completed': [],
+                    'total_input_tokens': 900,
+                    'total_output_tokens': 300,
+                    'estimated_cost': 0.009,
+                    'usage_by_tool': {'summarize': {'input': 300, 'output': 150}},
+                },
+            )
+        stats = memory.get_llm_stats_last_7_runs_avg()
+        assert stats['total_input_tokens'] == 900
+        assert stats['total_output_tokens'] == 300
+        assert stats['estimated_cost'] == 0.009
+        assert stats['usage_by_tool']['summarize']['input'] == 300
+
+    def test_get_llm_stats_last_7_runs_avg_no_runs(self, memory):
+        stats = memory.get_llm_stats_last_7_runs_avg()
+        assert stats['total_input_tokens'] == 0
+
     def test_update_workflow_publish_result(self, memory):
         run_id = 'wf-publish-test'
         memory.create_workflow_run(run_id)

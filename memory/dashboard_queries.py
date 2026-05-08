@@ -190,16 +190,37 @@ class DashboardMixin:
         finally:
             session.close()
 
-    def get_llm_stats(self, days: int = 30) -> dict[str, Any]:
-        """Get LLM usage statistics over the last days."""
+    def get_llm_stats(
+        self,
+        days: int = 30,
+        from_ts: datetime | None = None,
+        to_ts: datetime | None = None,
+    ) -> dict[str, Any]:
+        """Get LLM usage statistics over the last days.
+
+        Args:
+            days: Number of days to look back. Ignored if from_ts/to_ts provided.
+            from_ts: Explicit start timestamp. Takes precedence over days.
+            to_ts: Explicit end timestamp. Takes precedence over days.
+
+        Returns:
+            Dict with token totals, cost, run count, and per-tool breakdown.
+        """
         session = get_session(self.engine)
         try:
-            cutoff = datetime.utcnow() - timedelta(days=days)
-            runs = (
-                session.query(WorkflowRun)
-                .filter(WorkflowRun.started_at >= cutoff)
-                .all()
+            if from_ts and to_ts:
+                cutoff_start = from_ts
+                cutoff_end = to_ts
+            else:
+                cutoff_start = datetime.utcnow() - timedelta(days=days)
+                cutoff_end = None
+
+            query = session.query(WorkflowRun).filter(
+                WorkflowRun.started_at >= cutoff_start
             )
+            if cutoff_end:
+                query = query.filter(WorkflowRun.started_at <= cutoff_end)
+            runs = query.all()
 
             totals: dict[str, Any] = {
                 'total_input_tokens': 0,
@@ -225,6 +246,67 @@ class DashboardMixin:
 
             totals['estimated_cost'] = round(totals['estimated_cost'], 4)
             return totals
+        finally:
+            session.close()
+
+    def get_llm_stats_previous_run(self) -> dict[str, Any]:
+        """Get LLM usage statistics for the most recent completed workflow run.
+
+        Returns:
+            Dict with token totals, cost, and per-tool breakdown for the last run.
+        """
+        session = get_session(self.engine)
+        try:
+            run = (
+                session.query(WorkflowRun)
+                .filter(
+                    WorkflowRun.status.in_(['success', 'failed']),
+                    WorkflowRun.completed_at.isnot(None),
+                )
+                .order_by(WorkflowRun.started_at.desc())
+                .first()
+            )
+            if not run or not run.started_at or not run.completed_at:
+                return self.get_llm_stats(days=0)
+            return self.get_llm_stats(
+                from_ts=run.started_at,
+                to_ts=run.completed_at,
+            )
+        finally:
+            session.close()
+
+    def get_llm_stats_last_7_runs_avg(self) -> dict[str, Any]:
+        """Get average LLM usage statistics over the last 7 completed runs.
+
+        Returns:
+            Dict with averaged token totals, cost, and per-tool breakdown.
+        """
+        session = get_session(self.engine)
+        try:
+            runs = (
+                session.query(WorkflowRun)
+                .filter(
+                    WorkflowRun.status.in_(['success', 'failed']),
+                    WorkflowRun.completed_at.isnot(None),
+                )
+                .order_by(WorkflowRun.started_at.desc())
+                .limit(7)
+                .all()
+            )
+            if not runs:
+                return self.get_llm_stats(days=0)
+            earliest = min(r.started_at for r in runs if r.started_at)
+            latest = max(r.completed_at for r in runs if r.completed_at)
+            stats = self.get_llm_stats(from_ts=earliest, to_ts=latest)
+            n = len(runs)
+            stats['total_input_tokens'] = round(stats['total_input_tokens'] / n)
+            stats['total_output_tokens'] = round(stats['total_output_tokens'] / n)
+            stats['estimated_cost'] = round(stats['estimated_cost'] / n, 4)
+            stats['runs_tracked'] = round(stats['runs_tracked'] / n)
+            for tool in stats.get('usage_by_tool', {}).values():
+                tool['input'] = round(tool['input'] / n)
+                tool['output'] = round(tool['output'] / n)
+            return stats
         finally:
             session.close()
 

@@ -104,6 +104,18 @@ def api_llm() -> Response:
     return jsonify(memory.get_llm_stats(30))
 
 
+@dashboard_bp.route('/dashboard/api/llm/previous-run')
+def api_llm_previous_run() -> Response:
+    """Return LLM usage statistics for the most recent workflow run."""
+    return jsonify(memory.get_llm_stats_previous_run())
+
+
+@dashboard_bp.route('/dashboard/api/llm/weekly-avg')
+def api_llm_weekly_avg() -> Response:
+    """Return average LLM usage statistics over the last 7 workflow runs."""
+    return jsonify(memory.get_llm_stats_last_7_runs_avg())
+
+
 @dashboard_bp.route('/dashboard/api/cache')
 def api_cache() -> Response:
     """Return summary cache hit/miss statistics over the last 30 days."""
