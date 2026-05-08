@@ -1,5 +1,9 @@
 const charts = {};
 
+let runsPageSize = 5;
+let runsOffset = 0;
+let runsTotal = 0;
+
 function formatDate(iso) {
     if (!iso) return '—';
     const d = new Date(iso);
@@ -22,6 +26,35 @@ async function fetchJson(url) {
     return res.json();
 }
 
+function initRunsControls() {
+    document.getElementById('runs-toggle').addEventListener('click', () => {
+        const content = document.getElementById('runs-content');
+        const chevron = document.getElementById('runs-chevron');
+        const hidden = content.classList.toggle('hidden');
+        chevron.style.transform = hidden ? 'rotate(-90deg)' : '';
+    });
+
+    document.getElementById('runs-page-size').addEventListener('change', (e) => {
+        runsPageSize = parseInt(e.target.value);
+        runsOffset = 0;
+        loadRuns();
+    });
+
+    document.getElementById('runs-prev').addEventListener('click', () => {
+        if (runsOffset > 0) {
+            runsOffset = Math.max(0, runsOffset - runsPageSize);
+            loadRuns();
+        }
+    });
+
+    document.getElementById('runs-next').addEventListener('click', () => {
+        if (runsOffset + runsPageSize < runsTotal) {
+            runsOffset += runsPageSize;
+            loadRuns();
+        }
+    });
+}
+
 async function loadQuickStats() {
     const runs = await fetchJson('/dashboard/api/runs');
     const approvals = await fetchJson('/dashboard/api/approvals');
@@ -41,7 +74,17 @@ async function loadQuickStats() {
 }
 
 async function loadRuns() {
-    const runs = await fetchJson('/dashboard/api/runs');
+    const data = await fetchJson(`/dashboard/api/runs/window?offset=${runsOffset}&limit=${runsPageSize}`);
+    runsTotal = data.total;
+    const runs = data.runs;
+
+    const currentPage = Math.floor(runsOffset / runsPageSize) + 1;
+    const totalPages = Math.ceil(runsTotal / runsPageSize);
+
+    document.getElementById('runs-page-indicator').textContent = `Page ${currentPage} of ${totalPages}`;
+    document.getElementById('runs-prev').disabled = runsOffset === 0;
+    document.getElementById('runs-next').disabled = runsOffset + runsPageSize >= runsTotal;
+
     const tbody = document.querySelector('#runs-table tbody');
     tbody.innerHTML = runs.map(r => `
         <tr>
@@ -179,5 +222,6 @@ async function loadAll() {
     ]);
 }
 
+initRunsControls();
 loadAll();
 setInterval(loadAll, 5 * 60 * 1000);

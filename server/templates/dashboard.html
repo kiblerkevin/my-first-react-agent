@@ -20,8 +20,25 @@
 <div class="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] gap-5 px-8 py-5">
     <!-- Workflow Runs -->
     <div class="bg-white rounded-lg p-5 shadow-sm col-span-full">
-        <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">📋 Recent Workflow Runs</h2>
-        <div class="overflow-x-auto">
+        <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+            <button id="runs-toggle" class="flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-700">
+                <span id="runs-chevron" class="transition-transform">▼</span>
+                📋 Recent Workflow Runs
+            </button>
+            <div class="flex items-center gap-3 text-sm">
+                <select id="runs-page-size" class="border border-gray-200 rounded px-2 py-1 text-xs">
+                    <option value="5" selected>5 per page</option>
+                    <option value="10">10 per page</option>
+                    <option value="20">20 per page</option>
+                </select>
+                <div class="flex items-center gap-2">
+                    <button id="runs-prev" class="px-2 py-1 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">◀</button>
+                    <span id="runs-page-indicator" class="text-xs text-gray-500"></span>
+                    <button id="runs-next" class="px-2 py-1 border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">▶</button>
+                </div>
+            </div>
+        </div>
+        <div id="runs-content" class="overflow-x-auto">
             <table class="w-full text-sm" id="runs-table">
                 <thead>
                     <tr>
