@@ -1,8 +1,10 @@
 """Mixin for dashboard query operations."""
 
 import json as _json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
+
+from langfuse.api import LangfuseAPI
 
 from memory.database import (
     ApiCallResult,
@@ -14,6 +16,7 @@ from memory.database import (
     get_session,
 )
 from utils.logger.logger import setup_logger
+from utils.secrets import get_secret
 
 logger = setup_logger(__name__)
 
@@ -196,7 +199,7 @@ class DashboardMixin:
         from_ts: datetime | None = None,
         to_ts: datetime | None = None,
     ) -> dict[str, Any]:
-        """Get LLM usage statistics over the last days.
+        """Get LLM usage statistics from Langfuse.
 
         Args:
             days: Number of days to look back. Ignored if from_ts/to_ts provided.
@@ -204,56 +207,86 @@ class DashboardMixin:
             to_ts: Explicit end timestamp. Takes precedence over days.
 
         Returns:
-            Dict with token totals, cost, run count, and per-tool breakdown.
+            Dict with token totals, cost, generation count, and breakdowns.
         """
-        session = get_session(self.engine)
         try:
-            if from_ts and to_ts:
-                cutoff_start = from_ts
-                cutoff_end = to_ts
-            else:
-                cutoff_start = datetime.utcnow() - timedelta(days=days)
-                cutoff_end = None
-
-            query = session.query(WorkflowRun).filter(
-                WorkflowRun.started_at >= cutoff_start
+            client = LangfuseAPI(
+                username=get_secret('LANGFUSE_PUBLIC_KEY'),
+                password=get_secret('LANGFUSE_SECRET_KEY'),
+                base_url=get_secret('LANGFUSE_HOST'),
             )
-            if cutoff_end:
-                query = query.filter(WorkflowRun.started_at <= cutoff_end)
-            runs = query.all()
+            now = datetime.now(timezone.utc)
+            if from_ts and to_ts:
+                start = from_ts if from_ts.tzinfo else from_ts.replace(tzinfo=timezone.utc)
+                end = to_ts if to_ts.tzinfo else to_ts.replace(tzinfo=timezone.utc)
+            else:
+                start = now - timedelta(days=days)
+                end = now
 
             totals: dict[str, Any] = {
                 'total_input_tokens': 0,
                 'total_output_tokens': 0,
-                'estimated_cost': 0.0,
-                'runs_tracked': 0,
-                'usage_by_tool': {},
+                'total_cost': 0.0,
+                'generation_count': 0,
+                'by_model': {},
+                'by_function': {},
             }
-            for r in runs:
-                if r.total_input_tokens:
-                    totals['total_input_tokens'] += r.total_input_tokens
-                    totals['total_output_tokens'] += r.total_output_tokens or 0
-                    totals['estimated_cost'] += r.estimated_cost or 0.0
-                    totals['runs_tracked'] += 1
-                if r.usage_by_tool:
-                    for tool, usage in _json.loads(r.usage_by_tool).items():
-                        if tool not in totals['usage_by_tool']:
-                            totals['usage_by_tool'][tool] = {'input': 0, 'output': 0}
-                        totals['usage_by_tool'][tool]['input'] += usage.get('input', 0)
-                        totals['usage_by_tool'][tool]['output'] += usage.get(
-                            'output', 0
-                        )
 
-            totals['estimated_cost'] = round(totals['estimated_cost'], 4)
+            page = 1
+            while True:
+                resp = client.legacy.observations_v1.get_many(
+                    type='GENERATION',
+                    from_timestamp=start,
+                    to_timestamp=end,
+                    limit=100,
+                    page=page,
+                )
+                if not resp.data:
+                    break
+                for obs in resp.data:
+                    input_tok = getattr(obs.usage, 'input', 0) or 0
+                    output_tok = getattr(obs.usage, 'output', 0) or 0
+                    cost = obs.calculated_total_cost or 0.0
+
+                    totals['total_input_tokens'] += input_tok
+                    totals['total_output_tokens'] += output_tok
+                    totals['total_cost'] += cost
+                    totals['generation_count'] += 1
+
+                    model = obs.model or 'unknown'
+                    if model not in totals['by_model']:
+                        totals['by_model'][model] = {'input': 0, 'output': 0}
+                    totals['by_model'][model]['input'] += input_tok
+                    totals['by_model'][model]['output'] += output_tok
+
+                    func = obs.name or 'unknown'
+                    if func not in totals['by_function']:
+                        totals['by_function'][func] = {'input': 0, 'output': 0}
+                    totals['by_function'][func]['input'] += input_tok
+                    totals['by_function'][func]['output'] += output_tok
+
+                if len(resp.data) < 100:
+                    break
+                page += 1
+
+            totals['total_cost'] = round(totals['total_cost'], 4)
             return totals
-        finally:
-            session.close()
+        except Exception as e:
+            logger.error(f'Failed to fetch LLM stats from Langfuse: {e}')
+            return {
+                'total_input_tokens': 0,
+                'total_output_tokens': 0,
+                'total_cost': 0.0,
+                'generation_count': 0,
+                'by_model': {},
+                'by_function': {},
+            }
 
     def get_llm_stats_previous_run(self) -> dict[str, Any]:
         """Get LLM usage statistics for the most recent completed workflow run.
 
         Returns:
-            Dict with token totals, cost, and per-tool breakdown for the last run.
+            Dict with token totals, cost, and per-function breakdown for the last run.
         """
         session = get_session(self.engine)
         try:
@@ -279,7 +312,7 @@ class DashboardMixin:
         """Get average LLM usage statistics over the last 7 completed runs.
 
         Returns:
-            Dict with averaged token totals, cost, and per-tool breakdown.
+            Dict with averaged token totals, cost, and per-function breakdown.
         """
         session = get_session(self.engine)
         try:
@@ -301,11 +334,14 @@ class DashboardMixin:
             n = len(runs)
             stats['total_input_tokens'] = round(stats['total_input_tokens'] / n)
             stats['total_output_tokens'] = round(stats['total_output_tokens'] / n)
-            stats['estimated_cost'] = round(stats['estimated_cost'] / n, 4)
-            stats['runs_tracked'] = round(stats['runs_tracked'] / n)
-            for tool in stats.get('usage_by_tool', {}).values():
-                tool['input'] = round(tool['input'] / n)
-                tool['output'] = round(tool['output'] / n)
+            stats['total_cost'] = round(stats['total_cost'] / n, 4)
+            stats['generation_count'] = round(stats['generation_count'] / n)
+            for model in stats.get('by_model', {}).values():
+                model['input'] = round(model['input'] / n)
+                model['output'] = round(model['output'] / n)
+            for func in stats.get('by_function', {}).values():
+                func['input'] = round(func['input'] / n)
+                func['output'] = round(func['output'] / n)
             return stats
         finally:
             session.close()
@@ -397,13 +433,7 @@ class DashboardMixin:
         session = get_session(self.engine)
         try:
             runs = (
-                session.query(
-                    WorkflowRun.run_id,
-                    WorkflowRun.started_at,
-                    WorkflowRun.status,
-                    WorkflowRun.overall_score,
-                    WorkflowRun.draft_attempts,
-                )
+                session.query(WorkflowRun)
                 .filter(WorkflowRun.status.in_(['success', 'failed']))
                 .order_by(WorkflowRun.started_at.desc())
                 .offset(offset)
@@ -415,9 +445,22 @@ class DashboardMixin:
                 {
                     'run_id': r.run_id,
                     'started_at': r.started_at.isoformat() if r.started_at else None,
+                    'completed_at': r.completed_at.isoformat()
+                    if r.completed_at
+                    else None,
+                    'duration_seconds': (
+                        r.completed_at - r.started_at
+                    ).total_seconds()
+                    if r.completed_at and r.started_at
+                    else None,
                     'status': r.status,
+                    'articles_fetched': r.articles_fetched,
+                    'articles_new': r.articles_new,
+                    'summaries_count': r.summaries_count,
                     'overall_score': r.overall_score,
                     'draft_attempts': r.draft_attempts,
+                    'revision_tool_calls': r.revision_tool_calls,
+                    'publish_success': r.publish_success,
                 }
                 for r in runs
             ]

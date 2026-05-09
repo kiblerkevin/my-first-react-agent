@@ -13,10 +13,12 @@ from anthropic import (
 )
 from anthropic.types import Message
 from dotenv import load_dotenv
-from langfuse import observe
+from langfuse import Langfuse, observe
 
 from utils.logger.logger import setup_logger
 from utils.secrets import get_secret
+
+langfuse = Langfuse()
 
 load_dotenv()
 
@@ -108,6 +110,13 @@ class ClaudeClient:
                 if tool_choice:
                     kwargs['tool_choice'] = tool_choice
                 response = self.client.messages.create(**kwargs)
+                langfuse.update_current_generation(
+                    model=self.model,
+                    usage_details={
+                        'input': response.usage.input_tokens,
+                        'output': response.usage.output_tokens,
+                    },
+                )
                 return response
             except RateLimitError as e:
                 if attempt < self._rl_max_retries:
@@ -183,6 +192,13 @@ class ClaudeClient:
                     temperature=self.temperature,
                     system=self.system_prompt,
                     messages=[{'role': 'user', 'content': user_message}],
+                )
+                langfuse.update_current_generation(
+                    model=self.model,
+                    usage_details={
+                        'input': response.usage.input_tokens,
+                        'output': response.usage.output_tokens,
+                    },
                 )
                 return response.content[0].text
             except RateLimitError as e:

@@ -121,15 +121,34 @@ async function loadEvalChart() {
 }
 
 function renderLlmCard(title, llm) {
-    const tracked = llm.runs_tracked || 0;
+    const count = llm.generation_count || 0;
     let html = `<div class="bg-white rounded-lg p-5 shadow-sm">
         <h2 class="text-sm font-medium text-gray-500 mb-4 pb-2 border-b border-gray-100">${title}</h2>
-        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Runs Tracked</span><span class="font-semibold">${tracked}</span></div>
+        <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Generations</span><span class="font-semibold">${count.toLocaleString()}</span></div>
         <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Input Tokens</span><span class="font-semibold">${(llm.total_input_tokens || 0).toLocaleString()}</span></div>
         <div class="flex justify-between py-1.5 border-b border-gray-50"><span class="text-gray-500">Output Tokens</span><span class="font-semibold">${(llm.total_output_tokens || 0).toLocaleString()}</span></div>
-        <div class="flex justify-between py-1.5"><span class="text-gray-500">Est. Cost</span><span class="font-semibold">$${(llm.estimated_cost || 0).toFixed(4)}</span></div>
-        ${!tracked ? '<div class="text-gray-400 text-xs mt-2">Token tracking not yet populated.</div>' : ''}
-    </div>`;
+        <div class="flex justify-between py-1.5"><span class="text-gray-500">Total Cost</span><span class="font-semibold">$${(llm.total_cost || 0).toFixed(4)}</span></div>`;
+
+    if (llm.by_model && Object.keys(llm.by_model).length > 0) {
+        html += `<div class="mt-3 pt-2 border-t border-gray-100"><div class="text-xs font-medium text-gray-400 mb-1">By Model</div>`;
+        for (const [model, usage] of Object.entries(llm.by_model)) {
+            html += `<div class="flex justify-between py-1 text-xs"><span class="text-gray-500 truncate mr-2">${model}</span><span class="font-semibold whitespace-nowrap">${usage.input.toLocaleString()} / ${usage.output.toLocaleString()} tok</span></div>`;
+        }
+        html += `</div>`;
+    }
+
+    if (llm.by_function && Object.keys(llm.by_function).length > 0) {
+        html += `<div class="mt-3 pt-2 border-t border-gray-100"><div class="text-xs font-medium text-gray-400 mb-1">By Function</div>`;
+        for (const [func, usage] of Object.entries(llm.by_function)) {
+            html += `<div class="flex justify-between py-1 text-xs"><span class="text-gray-500 truncate mr-2">${func}</span><span class="font-semibold whitespace-nowrap">${usage.input.toLocaleString()} / ${usage.output.toLocaleString()} tok</span></div>`;
+        }
+        html += `</div>`;
+    }
+
+    if (!count) {
+        html += `<div class="text-gray-400 text-xs mt-2">No LLM usage data found.</div>`;
+    }
+    html += `</div>`;
     return html;
 }
 
