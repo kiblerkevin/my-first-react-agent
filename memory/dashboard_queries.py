@@ -236,8 +236,8 @@ class DashboardMixin:
             while True:
                 resp = client.legacy.observations_v1.get_many(
                     type='GENERATION',
-                    from_timestamp=start,
-                    to_timestamp=end,
+                    from_start_time=start,
+                    to_start_time=end,
                     limit=100,
                     page=page,
                 )
