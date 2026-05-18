@@ -4,6 +4,23 @@
 
 ---
 
+## Timeline Summary
+
+| Phase | Work | Days (Aurora) | Days (DynamoDB) |
+|---|---|---|---|
+| 0 | Bootstrap (AWS account, OIDC, ACM certs, Langfuse Cloud, Auth0 SPA) | 1 | 1 |
+| 1 | Infrastructure provisioning (OpenTofu) | 1–2 | 1–2 |
+| 2 | Database migration + validation | 1 | 4–6 |
+| 3 | Deploy Lambdas + Step Functions, test workflow end-to-end | 1–2 | 1–2 |
+| 4 | Deploy SPA + API Gateway, test approval flow | 1–2 | 1–2 |
+| 5 | DNS cutover, 7-day parallel monitoring, decommission local | 1 + 7 monitoring | 1 + 7 monitoring |
+| | **Total active work** | **6–9 days** | **9–14 days** |
+| | **Total calendar time (including monitoring)** | **13–16 days** | **16–21 days** |
+
+The DynamoDB path adds 3–5 days due to the full rewrite of the memory layer (10 mixins, 13 dashboard query methods, 7 table schemas). The Aurora path requires only a connection string swap.
+
+---
+
 ## Table of Contents
 
 1. [Overview & Cost Comparison](#1-overview--cost-comparison)
