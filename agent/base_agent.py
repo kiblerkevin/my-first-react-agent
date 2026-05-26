@@ -142,10 +142,7 @@ class BaseAgent:
             if block.type != 'tool_use':
                 continue
 
-            if (
-                self.max_tool_calls
-                and self.tool_call_count >= self.max_tool_calls
-            ):
+            if self.max_tool_calls and self.tool_call_count >= self.max_tool_calls:
                 logger.warning(
                     f'Tool call limit reached mid-response '
                     f'({self.max_tool_calls}). Stopping.'

@@ -91,8 +91,8 @@ def _set_security_headers(response: Any) -> Any:
 WP_CLIENT_ID = get_secret('WORDPRESS_CLIENT_ID')
 WP_CLIENT_SECRET = get_secret('WORDPRESS_CLIENT_SECRET')
 WP_REDIRECT_URI = (
-    (get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000') + '/oauth/callback'
-)
+    get_secret('APPROVAL_BASE_URL') or 'http://localhost:5000'
+) + '/oauth/callback'
 WP_AUTHORIZE_URL = 'https://public-api.wordpress.com/oauth2/authorize'
 WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'
 
@@ -100,7 +100,9 @@ WP_TOKEN_URL = 'https://public-api.wordpress.com/oauth2/token'
 @app.route('/')
 def root() -> Any:
     """Redirect to the WordPress site."""
-    return redirect(get_secret('WORDPRESS_URL') or 'https://chicagosportsrecap.wordpress.com')
+    return redirect(
+        get_secret('WORDPRESS_URL') or 'https://chicagosportsrecap.wordpress.com'
+    )
 
 
 @app.route('/health')
@@ -138,7 +140,9 @@ def oauth_callback() -> Any:
 
     if not code:
         return (
-            render_template('oauth_error.html', error='No authorization code received.'),
+            render_template(
+                'oauth_error.html', error='No authorization code received.'
+            ),
             400,
         )
 

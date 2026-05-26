@@ -229,7 +229,9 @@ class TestMemoryWorkflowOps:
         assert stats['by_function'] == {}
 
     def test_get_llm_stats_langfuse_error(self, memory):
-        with patch('memory.dashboard_queries.LangfuseAPI', side_effect=Exception('fail')):
+        with patch(
+            'memory.dashboard_queries.LangfuseAPI', side_effect=Exception('fail')
+        ):
             stats = memory.get_llm_stats(30)
         assert stats['total_input_tokens'] == 0
         assert stats['total_cost'] == 0.0
@@ -271,9 +273,7 @@ class TestMemoryWorkflowOps:
     def test_get_llm_stats_previous_run(self, memory):
         run_id = 'wf-llm-prev'
         memory.create_workflow_run(run_id)
-        memory.update_workflow_run(
-            run_id, {'status': 'success', 'steps_completed': []}
-        )
+        memory.update_workflow_run(run_id, {'status': 'success', 'steps_completed': []})
 
         mock_obs = MagicMock()
         mock_obs.usage = MagicMock(input=300, output=100)

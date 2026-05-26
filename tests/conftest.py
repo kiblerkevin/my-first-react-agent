@@ -4,6 +4,10 @@ import json
 import os
 import sys
 
+# Set test secrets BEFORE any module imports that might trigger approval_server
+os.environ.setdefault('APPROVAL_SECRET_KEY', 'test-secret-key-for-tests')
+os.environ.setdefault('APPROVAL_BASE_URL', 'http://localhost:5000')
+
 import pytest
 
 # Ensure project root is on path (needed for mutmut which runs from mutants/ dir)

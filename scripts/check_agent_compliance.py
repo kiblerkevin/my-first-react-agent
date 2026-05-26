@@ -189,10 +189,10 @@ def check_magic_numbers(content: str, file_path: str) -> list[ComplianceViolatio
         stripped = line.strip()
         if stripped.startswith('#'):
             continue
-        if '"""' in line or "'''" in line:
-            # Simple check - if odd number of triple quotes, likely in string
-            if line.count('"""') % 2 == 1 or line.count("'''") % 2 == 1:
-                continue
+        if ('"""' in line or "'''" in line) and (
+            line.count('"""') % 2 == 1 or line.count("'''") % 2 == 1
+        ):
+            continue
 
         # Skip lines that match skip patterns
         if any(pattern in line for pattern in skip_patterns):

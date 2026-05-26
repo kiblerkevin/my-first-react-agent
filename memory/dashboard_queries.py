@@ -9,7 +9,6 @@ from langfuse.api import LangfuseAPI
 from memory.database import (
     ApiCallResult,
     Evaluation,
-    PendingApproval,
     Summary,
     SummaryStats,
     WorkflowRun,
@@ -217,7 +216,9 @@ class DashboardMixin:
             )
             now = datetime.now(timezone.utc)
             if from_ts and to_ts:
-                start = from_ts if from_ts.tzinfo else from_ts.replace(tzinfo=timezone.utc)
+                start = (
+                    from_ts if from_ts.tzinfo else from_ts.replace(tzinfo=timezone.utc)
+                )
                 end = to_ts if to_ts.tzinfo else to_ts.replace(tzinfo=timezone.utc)
             else:
                 start = now - timedelta(days=days)
@@ -448,9 +449,7 @@ class DashboardMixin:
                     'completed_at': r.completed_at.isoformat()
                     if r.completed_at
                     else None,
-                    'duration_seconds': (
-                        r.completed_at - r.started_at
-                    ).total_seconds()
+                    'duration_seconds': (r.completed_at - r.started_at).total_seconds()
                     if r.completed_at and r.started_at
                     else None,
                     'status': r.status,
@@ -467,9 +466,7 @@ class DashboardMixin:
         finally:
             session.close()
 
-    def get_runs_in_range(
-        self, start_date: str, end_date: str
-    ) -> list[dict[str, Any]]:
+    def get_runs_in_range(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
         """Get workflow runs in a date range."""
         session = get_session(self.engine)
         try:

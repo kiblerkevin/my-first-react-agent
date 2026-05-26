@@ -78,7 +78,11 @@ def run_daily_workflow(
     set_log_context(run_id=run_id)
     try:
         return _execute_workflow(
-            run_id, memory, steps_completed, cp_data, max_articles_per_team,
+            run_id,
+            memory,
+            steps_completed,
+            cp_data,
+            max_articles_per_team,
             force_refresh,
         )
     except Exception as e:
@@ -233,7 +237,9 @@ def _execute_workflow(
             f'{articles_data["new_article_count"]} new, '
             f'{articles_data["filtered_article_count"]} previously seen'
         )
-        _checkpoint_step('fetch_articles', steps_completed, memory, run_id, articles_data)
+        _checkpoint_step(
+            'fetch_articles', steps_completed, memory, run_id, articles_data
+        )
 
     if articles_data['new_article_count'] == 0:
         logger.info("No new articles found — skipping today's workflow.")
@@ -270,7 +276,9 @@ def _execute_workflow(
             'duplicate_count': dedup_output.duplicate_count,
         }
         logger.info(f'Duplicates removed: {dedup_data["duplicate_count"]}')
-        _checkpoint_step('deduplicate_articles', steps_completed, memory, run_id, dedup_data)
+        _checkpoint_step(
+            'deduplicate_articles', steps_completed, memory, run_id, dedup_data
+        )
 
     # Step 4: Summarize top articles per team
     if _step_done('summarize_articles', steps_completed):
@@ -464,7 +472,9 @@ def _execute_workflow(
             f'Taxonomy: {len(taxonomy.categories)} categories, '
             f'{len(taxonomy.tags)} tags'
         )
-        _checkpoint_step('create_taxonomy', steps_completed, memory, run_id, taxonomy_data)
+        _checkpoint_step(
+            'create_taxonomy', steps_completed, memory, run_id, taxonomy_data
+        )
 
     # Step 8: Send approval email
     if _step_done('send_approval_email', steps_completed):
@@ -493,7 +503,9 @@ def _execute_workflow(
             f'Approval email sent: {approval_data["email_sent"]} | '
             f'token: {approval_data["token"][:20]}...'
         )
-        _checkpoint_step('send_approval_email', steps_completed, memory, run_id, approval_data)
+        _checkpoint_step(
+            'send_approval_email', steps_completed, memory, run_id, approval_data
+        )
 
     result = {
         'skipped': False,

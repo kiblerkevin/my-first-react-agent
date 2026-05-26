@@ -1,7 +1,5 @@
 """Mixin for OAuth token operations."""
 
-from typing import Any
-
 from memory.database import OAuthToken, get_session
 from utils.logger.logger import setup_logger
 
