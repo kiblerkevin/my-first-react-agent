@@ -73,6 +73,7 @@ jobs:
           exit-code: 1
           severity: HIGH,CRITICAL
           format: table
+          trivyignores: ${{ env.WORKING_DIR }}/.trivyignore
 
   plan:
     needs: [detect-environment, format, security]
