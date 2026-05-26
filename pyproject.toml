@@ -82,12 +82,12 @@ disable_error_code = ["import-untyped", "arg-type", "method-assign", "assignment
 
 # Tests: suppress common test assertion patterns
 [[tool.mypy.overrides]]
-module = ["tests.*"]
+module = ["tests", "tests.*", "tests.*.*"]
 disable_error_code = ["union-attr", "index", "operator", "var-annotated"]
 
 # Scripts: not part of core app, relax checking
 [[tool.mypy.overrides]]
-module = ["scripts.*"]
+module = ["scripts", "scripts.*"]
 disable_error_code = ["assignment", "attr-defined", "arg-type", "var-annotated"]
 
 # Utils collectors: suppress minor annotation issues
