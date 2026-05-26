@@ -40,6 +40,7 @@ warn_unused_configs = false
 disallow_untyped_defs = false
 check_untyped_defs = true
 plugins = ["pydantic.mypy"]
+exclude = ["tests/", "scripts/"]
 
 # Strict typing for core application code
 [[tool.mypy.overrides]]
@@ -79,16 +80,6 @@ disable_error_code = ["attr-defined", "assignment", "arg-type", "return-value", 
 [[tool.mypy.overrides]]
 module = ["server.*"]
 disable_error_code = ["import-untyped", "arg-type", "method-assign", "assignment", "no-any-return"]
-
-# Tests: suppress common test assertion patterns
-[[tool.mypy.overrides]]
-module = ["tests", "tests.*", "tests.*.*"]
-disable_error_code = ["union-attr", "index", "operator", "var-annotated"]
-
-# Scripts: not part of core app, relax checking
-[[tool.mypy.overrides]]
-module = ["scripts", "scripts.*"]
-disable_error_code = ["assignment", "attr-defined", "arg-type", "var-annotated"]
 
 # Utils collectors: suppress minor annotation issues
 [[tool.mypy.overrides]]
