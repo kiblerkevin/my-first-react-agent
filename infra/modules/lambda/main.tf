@@ -42,7 +42,7 @@ locals {
 # Placeholder zip for initial deployment
 data "archive_file" "placeholder" {
   type        = "zip"
-  output_path = "${path.root}/.terraform/tmp/placeholder.zip"
+  output_path = "/tmp/lambda-placeholder.zip"
 
   source {
     content  = "def handler(event, context): return {'statusCode': 200}"
