@@ -210,5 +210,12 @@ marimo/_lsp/
 __marimo__/
 
 data/
+data/articles.db
 
 .checkmarxIgnored
+
+logs/
+
+# Tailwind CSS
+tools/bin/
+server/static/css/output.css

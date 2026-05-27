@@ -165,7 +165,7 @@ mutmut results
 
 ## Future State
 
-- **FastAPI Migration** — Migrate Flask approval server and dashboard to FastAPI for async support, native Pydantic validation, auto-generated OpenAPI docs, and type-safe routing. Trigger: when adding WebSocket dashboard updates, public API, or concurrent webhook handling.
+- **FastAPI Migration + Proper Frontend** — Migrate Flask approval server and dashboard to FastAPI for async support, native Pydantic validation, auto-generated OpenAPI docs, and type-safe routing. At that point, adopt template inheritance (`base.html` with shared nav/CSS) and extract CSS/JS into `static/` files with a build step. Current approval pages are intentionally self-contained (rendered from email one-click links, no JS needed) and the two dashboard templates don't share enough to justify the overhead without a bundler or CSS framework. Trigger: when adding WebSocket dashboard updates, public API, 3+ dashboard pages, or concurrent webhook handling.
 - **External Log Aggregation** — Add configurable log transport handler (CloudWatch, Datadog, ELK) for centralized search, alerting, and visualization. JSON log format is already compatible — just needs a shipper (Filebeat, CloudWatch agent, Fluentd) or a direct handler. Trigger: when moving beyond single-machine deployment.
 - **Security Hardening** — See `SECURITY_TODO.md` for remaining items (S1 secrets management, S2 token encryption, S4 Auth0 integration). Completed: S3, S5, S6, S7, S8, S9, S10.
 

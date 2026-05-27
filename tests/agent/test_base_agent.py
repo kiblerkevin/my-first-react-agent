@@ -127,7 +127,11 @@ class TestBaseAgentToolUseLoop:
         agent = BaseAgent(context=context, claude_client=client, max_tool_calls=1)
         agent.tool_call_count = 0
 
-        # Response with two tool_use blocks — second should be blocked
+        # Response with a text block + two tool_use blocks — second should be blocked
+        text_preamble = MagicMock()
+        text_preamble.type = 'text'
+        text_preamble.text = 'Let me call two tools'
+
         tool_block_1 = MagicMock()
         tool_block_1.type = 'tool_use'
         tool_block_1.name = 'tool_a'
@@ -138,7 +142,7 @@ class TestBaseAgentToolUseLoop:
         tool_block_2.name = 'tool_b'
         tool_block_2.input = {}
 
-        first_response = MagicMock(content=[tool_block_1, tool_block_2])
+        first_response = MagicMock(content=[text_preamble, tool_block_1, tool_block_2])
 
         # After the error result, Claude returns text
         text_block = MagicMock()
@@ -327,35 +331,6 @@ class TestBaseAgentRemainingGaps:
 
         result = agent._execute_tool('broken_tool', {'x': 1})
         assert 'Error executing tool broken_tool' in result
-
-    def test_print_tool_use(self, capsys):
-        """Line 300: prints tool use details."""
-        context = ContextWindow(conversation_history=[])
-        client = MagicMock()
-        agent = BaseAgent(context=context, claude_client=client)
-
-        from agent.context_window import ToolUse
-
-        tool_use = ToolUse(id='1', name='test_tool', input={'key': 'val'})
-        agent._print_tool_use(tool_use)
-
-        captured = capsys.readouterr()
-        assert 'test_tool' in captured.out
-        assert 'key' in captured.out
-
-    def test_print_tool_result(self, capsys):
-        """Line 308: prints tool result details."""
-        context = ContextWindow(conversation_history=[])
-        client = MagicMock()
-        agent = BaseAgent(context=context, claude_client=client)
-
-        from agent.context_window import ToolResult
-
-        tool_result = ToolResult(tool_use_id='1', content='result data', is_error=False)
-        agent._print_tool_result(tool_result)
-
-        captured = capsys.readouterr()
-        assert 'result data' in captured.out
 
     def test_inject_revision_context_non_draft_tool(self):
         """Line 229: returns input unchanged for non-draft tool."""

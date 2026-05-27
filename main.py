@@ -14,13 +14,19 @@ def main() -> None:
         if idx + 1 < len(sys.argv):
             resume_run_id = sys.argv[idx + 1]
 
+    force_refresh: bool = '--force-refresh' in sys.argv
+
     if resume_run_id:
         print(f'--- Resuming Workflow: {resume_run_id} ---\n')
     else:
         print('--- Running Daily Workflow ---\n')
+    if force_refresh:
+        print('(force_refresh=True — skipping deduplication filter)\n')
 
     result: dict[str, Any] = run_daily_workflow(
-        max_articles_per_team=2, resume_run_id=resume_run_id
+        max_articles_per_team=2,
+        resume_run_id=resume_run_id,
+        force_refresh=force_refresh,
     )
 
     print(f'\nRun ID: {result["run_id"]}')

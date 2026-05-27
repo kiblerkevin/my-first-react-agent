@@ -228,7 +228,7 @@ class RevisionAgent:
         if all_evaluations and all_drafts:
             best_idx = max(
                 range(len(all_evaluations)),
-                key=lambda i: all_evaluations[i].get('overall_score', 0),
+                key=lambda i: (all_evaluations[i].get('overall_score', 0), i),
             )
             if best_idx < len(all_drafts):
                 best_draft = all_drafts[best_idx]

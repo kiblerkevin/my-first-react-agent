@@ -246,6 +246,32 @@ No manual action needed — just keep the approval server running (automatic wit
 
 ---
 
+## Frontend (Tailwind CSS + Alpine.js)
+
+### First-time setup
+```bash
+bash scripts/install-tailwind.sh    # downloads Tailwind CLI binary
+bash scripts/build-css.sh           # generates server/static/css/output.css
+```
+
+### Development
+```bash
+bash scripts/watch-css.sh           # auto-rebuild on template changes
+```
+
+### After editing templates
+```bash
+bash scripts/build-css.sh           # rebuild before committing
+```
+
+### Template structure
+- `base.html` — shared header, nav (Alpine.js), Tailwind CSS, Chart.js slot. Used by dashboard pages.
+- `base_simple.html` — minimal wrapper with Tailwind CSS only. Used by approval/OAuth pages.
+- JS extracted to `server/static/js/dashboard.js` and `server/static/js/iterations.js`.
+- Alpine.js loaded via CDN in `base.html`. No build step needed.
+
+---
+
 ## Troubleshooting
 
 | Issue | Solution |

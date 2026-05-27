@@ -3,7 +3,7 @@
 from typing import Any
 
 from google import genai
-from langfuse import observe
+from langfuse import Langfuse, observe
 
 from agent.gemini_adapter import (
     AdaptedMessage,
@@ -13,6 +13,8 @@ from agent.gemini_adapter import (
 )
 from utils.logger.logger import setup_logger
 from utils.secrets import get_secret
+
+langfuse = Langfuse()
 
 logger = setup_logger(__name__)
 
@@ -84,6 +86,14 @@ class GeminiClient:
             kwargs['tools'] = gemini_tools
 
         response = self.client.models.generate_content(**kwargs)
+        usage_meta = getattr(response, 'usage_metadata', None)
+        langfuse.update_current_generation(
+            model=self.model,
+            usage_details={
+                'input': getattr(usage_meta, 'prompt_token_count', 0) or 0,
+                'output': getattr(usage_meta, 'candidates_token_count', 0) or 0,
+            },
+        )
         logger.info(f'Gemini fallback response from {self.model}')
         return adapt_response(response)
 
@@ -108,6 +118,14 @@ class GeminiClient:
             model=self.model,
             contents=user_message,
             config=config,
+        )
+        usage_meta = getattr(response, 'usage_metadata', None)
+        langfuse.update_current_generation(
+            model=self.model,
+            usage_details={
+                'input': getattr(usage_meta, 'prompt_token_count', 0) or 0,
+                'output': getattr(usage_meta, 'candidates_token_count', 0) or 0,
+            },
         )
         text = response.text or ''
         logger.info(f'Gemini fallback text response from {self.model}')

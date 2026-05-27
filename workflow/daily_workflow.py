@@ -37,7 +37,9 @@ ORCHESTRATION_CONFIG_PATH = 'config/orchestration.yaml'
 
 @observe()
 def run_daily_workflow(
-    max_articles_per_team: int = 2, resume_run_id: str | None = None
+    max_articles_per_team: int = 2,
+    resume_run_id: str | None = None,
+    force_refresh: bool = False,
 ) -> dict[str, Any]:
     """Run the full daily workflow (steps 1-8).
 
@@ -46,6 +48,7 @@ def run_daily_workflow(
     Args:
         max_articles_per_team: Maximum articles to summarize per team.
         resume_run_id: Optional run ID to resume from checkpoint.
+        force_refresh: If True, skip deduplication filter on articles.
 
     Returns:
         Result dict with run_id, status, and workflow outputs.
@@ -75,7 +78,12 @@ def run_daily_workflow(
     set_log_context(run_id=run_id)
     try:
         return _execute_workflow(
-            run_id, memory, steps_completed, cp_data, max_articles_per_team
+            run_id,
+            memory,
+            steps_completed,
+            cp_data,
+            max_articles_per_team,
+            force_refresh,
         )
     except Exception as e:
         logger.error(f'Workflow {run_id} failed: {e}')
@@ -110,6 +118,26 @@ def _step_done(step_name: str, steps_completed: list[str]) -> bool:
     return step_name in steps_completed
 
 
+def _checkpoint_step(
+    step_name: str,
+    steps_completed: list[str],
+    memory: Memory,
+    run_id: str,
+    data: dict[str, Any],
+) -> None:
+    """Record a completed step and persist its checkpoint data.
+
+    Args:
+        step_name: Name of the step just completed.
+        steps_completed: Mutable list to append to.
+        memory: Memory layer instance.
+        run_id: Workflow run identifier.
+        data: Step output data to checkpoint.
+    """
+    steps_completed.append(step_name)
+    memory.save_checkpoint(run_id, step_name, data)
+
+
 def _run_drift_check(memory: Memory, run_id: str) -> None:
     """Run drift detection after workflow completion and send alerts.
 
@@ -137,6 +165,7 @@ def _execute_workflow(
     steps_completed: list[str],
     cp_data: dict[str, Any],
     max_articles_per_team: int,
+    force_refresh: bool = False,
 ) -> dict[str, Any]:
     """Execute all workflow steps with checkpoint support.
 
@@ -146,6 +175,7 @@ def _execute_workflow(
         steps_completed: Mutable list of completed step names.
         cp_data: Checkpoint data from a previous run.
         max_articles_per_team: Max articles to summarize per team.
+        force_refresh: If True, skip deduplication filter on articles.
 
     Returns:
         Result dict with run_id, status, and workflow outputs.
@@ -184,8 +214,7 @@ def _execute_workflow(
             'score_count': scores_output.score_count,
         }
         logger.info(f'Scores fetched: {scores_data["score_count"]}')
-        steps_completed.append('fetch_scores')
-        memory.save_checkpoint(run_id, 'fetch_scores', scores_data)
+        _checkpoint_step('fetch_scores', steps_completed, memory, run_id, scores_data)
 
     # Step 2: Fetch articles
     if _step_done('fetch_articles', steps_completed):
@@ -193,7 +222,9 @@ def _execute_workflow(
         articles_data: dict[str, Any] = cp_data['fetch_articles']
     else:
         logger.info('Step 2: Fetching articles...')
-        articles_output = fetch_articles_tool.execute(FetchArticlesInput(run_id=run_id))
+        articles_output = fetch_articles_tool.execute(
+            FetchArticlesInput(run_id=run_id, force_refresh=force_refresh)
+        )
         articles_data = {
             'articles': articles_output.articles,
             'new_articles': articles_output.new_articles,
@@ -206,8 +237,9 @@ def _execute_workflow(
             f'{articles_data["new_article_count"]} new, '
             f'{articles_data["filtered_article_count"]} previously seen'
         )
-        steps_completed.append('fetch_articles')
-        memory.save_checkpoint(run_id, 'fetch_articles', articles_data)
+        _checkpoint_step(
+            'fetch_articles', steps_completed, memory, run_id, articles_data
+        )
 
     if articles_data['new_article_count'] == 0:
         logger.info("No new articles found — skipping today's workflow.")
@@ -244,8 +276,9 @@ def _execute_workflow(
             'duplicate_count': dedup_output.duplicate_count,
         }
         logger.info(f'Duplicates removed: {dedup_data["duplicate_count"]}')
-        steps_completed.append('deduplicate_articles')
-        memory.save_checkpoint(run_id, 'deduplicate_articles', dedup_data)
+        _checkpoint_step(
+            'deduplicate_articles', steps_completed, memory, run_id, dedup_data
+        )
 
     # Step 4: Summarize top articles per team
     if _step_done('summarize_articles', steps_completed):
@@ -439,8 +472,9 @@ def _execute_workflow(
             f'Taxonomy: {len(taxonomy.categories)} categories, '
             f'{len(taxonomy.tags)} tags'
         )
-        steps_completed.append('create_taxonomy')
-        memory.save_checkpoint(run_id, 'create_taxonomy', taxonomy_data)
+        _checkpoint_step(
+            'create_taxonomy', steps_completed, memory, run_id, taxonomy_data
+        )
 
     # Step 8: Send approval email
     if _step_done('send_approval_email', steps_completed):
@@ -469,8 +503,9 @@ def _execute_workflow(
             f'Approval email sent: {approval_data["email_sent"]} | '
             f'token: {approval_data["token"][:20]}...'
         )
-        steps_completed.append('send_approval_email')
-        memory.save_checkpoint(run_id, 'send_approval_email', approval_data)
+        _checkpoint_step(
+            'send_approval_email', steps_completed, memory, run_id, approval_data
+        )
 
     result = {
         'skipped': False,

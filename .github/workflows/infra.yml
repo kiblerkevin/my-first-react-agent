@@ -1,0 +1,167 @@
+name: Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths: [infra/**]
+  pull_request:
+    branches: [main]
+    paths: [infra/**]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+      action:
+        description: "Action to perform"
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TOFU_VERSION: "1.8.0"
+  WORKING_DIR: infra
+
+jobs:
+  detect-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+    steps:
+      - id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: Check formatting
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu fmt -check -recursive -diff
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy IaC scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: ${{ env.WORKING_DIR }}
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          format: table
+          trivyignores: ${{ env.WORKING_DIR }}/.trivyignore
+
+  plan:
+    needs: [detect-environment, format, security]
+    runs-on: ubuntu-latest
+    environment: ${{ needs.detect-environment.outputs.environment }}-plan
+    env:
+      TF_VAR_FILE: environments/${{ needs.detect-environment.outputs.environment }}.tfvars
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-1
+
+      - name: Initialize
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu init
+
+      - name: Validate
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu validate
+
+      - name: Plan
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu plan -var-file="${{ env.TF_VAR_FILE }}" -out=tfplan -no-color
+        id: plan
+
+      - name: Upload plan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ needs.detect-environment.outputs.environment }}
+          path: ${{ env.WORKING_DIR }}/tfplan
+          retention-days: 5
+
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { execSync } = require('child_process');
+            const plan = execSync('cd ${{ env.WORKING_DIR }} && tofu show -no-color tfplan').toString();
+            const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n... (truncated)' : plan;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `### OpenTofu Plan (\`${{ needs.detect-environment.outputs.environment }}\`)\n\n\`\`\`\n${truncated}\n\`\`\``
+            });
+
+  apply:
+    needs: [detect-environment, plan]
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'apply') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment: ${{ needs.detect-environment.outputs.environment }}
+    env:
+      TF_VAR_FILE: environments/${{ needs.detect-environment.outputs.environment }}.tfvars
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-1
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ needs.detect-environment.outputs.environment }}
+          path: ${{ env.WORKING_DIR }}
+
+      - name: Initialize
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu init
+
+      - name: Apply
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu apply -auto-approve tfplan

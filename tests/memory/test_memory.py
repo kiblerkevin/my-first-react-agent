@@ -193,6 +193,148 @@ class TestMemoryWorkflowOps:
         assert cache['cache_hits'] == 1
         assert cache['cache_misses'] == 2
 
+    def test_get_llm_stats(self, memory):
+        mock_obs = MagicMock()
+        mock_obs.usage = MagicMock(input=500, output=200)
+        mock_obs.calculated_total_cost = 0.001
+        mock_obs.model = 'claude-sonnet-4-20250514'
+        mock_obs.name = 'send_messages_with_tools'
+
+        mock_resp = MagicMock()
+        mock_resp.data = [mock_obs]
+
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.return_value = mock_resp
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats(30)
+        assert stats['total_input_tokens'] == 500
+        assert stats['total_output_tokens'] == 200
+        assert stats['total_cost'] == 0.001
+        assert stats['generation_count'] == 1
+        assert stats['by_model']['claude-sonnet-4-20250514']['input'] == 500
+        assert stats['by_function']['send_messages_with_tools']['output'] == 200
+
+    def test_get_llm_stats_empty(self, memory):
+        mock_resp = MagicMock()
+        mock_resp.data = []
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.return_value = mock_resp
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats(30)
+        assert stats['total_input_tokens'] == 0
+        assert stats['generation_count'] == 0
+        assert stats['by_model'] == {}
+        assert stats['by_function'] == {}
+
+    def test_get_llm_stats_langfuse_error(self, memory):
+        with patch(
+            'memory.dashboard_queries.LangfuseAPI', side_effect=Exception('fail')
+        ):
+            stats = memory.get_llm_stats(30)
+        assert stats['total_input_tokens'] == 0
+        assert stats['total_cost'] == 0.0
+
+    def test_get_llm_stats_paginates(self, memory):
+        mock_obs = MagicMock()
+        mock_obs.usage = MagicMock(input=1, output=1)
+        mock_obs.calculated_total_cost = 0.0
+        mock_obs.model = 'test'
+        mock_obs.name = 'fn'
+
+        page1 = MagicMock()
+        page1.data = [mock_obs] * 100
+        page2 = MagicMock()
+        page2.data = [mock_obs] * 5
+
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.side_effect = [page1, page2]
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats(30)
+        assert stats['generation_count'] == 105
+        assert mock_client.legacy.observations_v1.get_many.call_count == 2
+
+    def test_get_llm_stats_with_explicit_timestamps(self, memory):
+        mock_resp = MagicMock()
+        mock_resp.data = []
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.return_value = mock_resp
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats(
+                from_ts=datetime.utcnow() - timedelta(hours=1),
+                to_ts=datetime.utcnow(),
+            )
+        assert stats['total_input_tokens'] == 0
+        mock_client.legacy.observations_v1.get_many.assert_called_once()
+
+    def test_get_llm_stats_previous_run(self, memory):
+        run_id = 'wf-llm-prev'
+        memory.create_workflow_run(run_id)
+        memory.update_workflow_run(run_id, {'status': 'success', 'steps_completed': []})
+
+        mock_obs = MagicMock()
+        mock_obs.usage = MagicMock(input=300, output=100)
+        mock_obs.calculated_total_cost = 0.002
+        mock_obs.model = 'claude-sonnet-4-20250514'
+        mock_obs.name = 'send_message'
+        mock_resp = MagicMock()
+        mock_resp.data = [mock_obs]
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.return_value = mock_resp
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats_previous_run()
+        assert stats['total_input_tokens'] == 300
+        assert stats['generation_count'] == 1
+
+    def test_get_llm_stats_previous_run_no_runs(self, memory):
+        mock_resp = MagicMock()
+        mock_resp.data = []
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.return_value = mock_resp
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats_previous_run()
+        assert stats['total_input_tokens'] == 0
+
+    def test_get_llm_stats_last_7_runs_avg(self, memory):
+        for i in range(3):
+            run_id = f'wf-llm-avg-{i}'
+            memory.create_workflow_run(run_id)
+            memory.update_workflow_run(
+                run_id, {'status': 'success', 'steps_completed': []}
+            )
+
+        mock_obs = MagicMock()
+        mock_obs.usage = MagicMock(input=900, output=300)
+        mock_obs.calculated_total_cost = 0.009
+        mock_obs.model = 'claude-sonnet-4-20250514'
+        mock_obs.name = 'send_message'
+        mock_resp = MagicMock()
+        mock_resp.data = [mock_obs]
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.return_value = mock_resp
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats_last_7_runs_avg()
+        assert stats['total_input_tokens'] == 300
+        assert stats['total_output_tokens'] == 100
+        assert stats['total_cost'] == 0.003
+        assert stats['by_model']['claude-sonnet-4-20250514']['input'] == 300
+
+    def test_get_llm_stats_last_7_runs_avg_no_runs(self, memory):
+        mock_resp = MagicMock()
+        mock_resp.data = []
+        mock_client = MagicMock()
+        mock_client.legacy.observations_v1.get_many.return_value = mock_resp
+
+        with patch('memory.dashboard_queries.LangfuseAPI', return_value=mock_client):
+            stats = memory.get_llm_stats_last_7_runs_avg()
+        assert stats['total_input_tokens'] == 0
+
     def test_update_workflow_publish_result(self, memory):
         run_id = 'wf-publish-test'
         memory.create_workflow_run(run_id)
@@ -228,10 +370,24 @@ class TestMemoryWorkflowOps:
             run_id = f'window-run-{i}'
             memory.create_workflow_run(run_id)
             memory.update_workflow_run(
-                run_id, {'status': 'success', 'steps_completed': []}
+                run_id,
+                {
+                    'status': 'success',
+                    'steps_completed': [],
+                    'articles_fetched': 10,
+                    'articles_new': 5,
+                    'summaries_count': 3,
+                    'revision_tool_calls': 2,
+                },
             )
         runs = memory.get_runs_in_window(offset=0, limit=2)
         assert len(runs) == 2
+        assert 'duration_seconds' in runs[0]
+        assert runs[0]['articles_fetched'] == 10
+        assert runs[0]['articles_new'] == 5
+        assert runs[0]['summaries_count'] == 3
+        assert 'revision_tool_calls' in runs[0]
+        assert 'publish_success' in runs[0]
 
     def test_get_total_run_count(self, memory):
         for i in range(3):
