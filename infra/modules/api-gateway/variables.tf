@@ -29,6 +29,7 @@ variable "domain" {
 }
 
 variable "acm_cert_arn" {
-  description = "ACM certificate ARN for the API custom domain"
+  description = "ACM certificate ARN for the API custom domain. Empty to skip custom domain."
   type        = string
+  default     = ""
 }

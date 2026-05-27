@@ -1,3 +1,7 @@
+locals {
+  create_distribution = var.acm_cert_arn != ""
+}
+
 resource "aws_cloudfront_origin_access_control" "spa" {
   name                              = "${var.prefix}-spa-oac"
   origin_access_control_origin_type = "s3"
@@ -6,6 +10,7 @@ resource "aws_cloudfront_origin_access_control" "spa" {
 }
 
 resource "aws_cloudfront_distribution" "spa" {
+  count               = local.create_distribution ? 1 : 0
   enabled             = true
   default_root_object = "index.html"
   aliases             = ["dashboard.${var.domain}"]
@@ -64,6 +69,7 @@ resource "aws_cloudfront_distribution" "spa" {
 
 # Grant CloudFront access to S3 bucket
 resource "aws_s3_bucket_policy" "spa" {
+  count  = local.create_distribution ? 1 : 0
   bucket = var.spa_bucket_id
 
   policy = jsonencode({
@@ -76,7 +82,7 @@ resource "aws_s3_bucket_policy" "spa" {
       Resource  = "${var.spa_bucket_arn}/*"
       Condition = {
         StringEquals = {
-          "AWS:SourceArn" = aws_cloudfront_distribution.spa.arn
+          "AWS:SourceArn" = aws_cloudfront_distribution.spa[0].arn
         }
       }
     }]

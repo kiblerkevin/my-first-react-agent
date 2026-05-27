@@ -46,9 +46,17 @@ variable "dynamodb_deletion_protection" {
 variable "auth0_issuer" {
   description = "Auth0 issuer URL for JWT validation"
   type        = string
+  default     = ""
 }
 
 variable "auth0_audience" {
   description = "Auth0 audience for JWT validation"
   type        = string
+  default     = ""
+}
+
+variable "acm_wait_for_validation" {
+  description = "Set to true after adding ACM DNS validation records in Cloudflare"
+  type        = bool
+  default     = false
 }

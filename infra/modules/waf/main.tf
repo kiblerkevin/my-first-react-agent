@@ -1,3 +1,11 @@
+terraform {
+  required_providers {
+    aws = {
+      source = "hashicorp/aws"
+    }
+  }
+}
+
 resource "aws_wafv2_web_acl" "cloudfront" {
   name  = "${var.prefix}-cloudfront-waf"
   scope = "CLOUDFRONT"

@@ -25,9 +25,10 @@ module "ses" {
 module "acm" {
   source = "./modules/acm"
 
-  domain     = var.domain
-  prefix     = local.prefix
-  aws_region = var.aws_region
+  domain               = var.domain
+  prefix               = local.prefix
+  aws_region           = var.aws_region
+  wait_for_validation  = var.acm_wait_for_validation
 
   providers = {
     aws           = aws

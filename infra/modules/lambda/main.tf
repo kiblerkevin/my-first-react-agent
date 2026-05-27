@@ -42,7 +42,7 @@ locals {
 # Placeholder zip for initial deployment
 data "archive_file" "placeholder" {
   type        = "zip"
-  output_path = "${path.module}/placeholder.zip"
+  output_path = "${path.root}/.terraform/tmp/placeholder.zip"
 
   source {
     content  = "def handler(event, context): return {'statusCode': 200}"
@@ -53,6 +53,7 @@ data "archive_file" "placeholder" {
 resource "aws_lambda_layer_version" "deps" {
   layer_name          = "${var.prefix}-deps"
   filename            = data.archive_file.placeholder.output_path
+  source_code_hash    = data.archive_file.placeholder.output_base64sha256
   compatible_runtimes = ["python3.12"]
   description         = "Shared dependencies layer"
 

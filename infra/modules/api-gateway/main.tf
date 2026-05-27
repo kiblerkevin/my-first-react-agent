@@ -11,6 +11,7 @@ resource "aws_apigatewayv2_api" "main" {
 }
 
 resource "aws_apigatewayv2_authorizer" "auth0" {
+  count            = var.auth0_issuer != "" ? 1 : 0
   api_id           = aws_apigatewayv2_api.main.id
   authorizer_type  = "JWT"
   identity_sources = ["$request.header.Authorization"]
@@ -59,8 +60,8 @@ resource "aws_apigatewayv2_route" "dashboard_api" {
   api_id             = aws_apigatewayv2_api.main.id
   route_key          = "GET /dashboard/api/{proxy+}"
   target             = "integrations/${aws_apigatewayv2_integration.lambda.id}"
-  authorization_type = "JWT"
-  authorizer_id      = aws_apigatewayv2_authorizer.auth0.id
+  authorization_type = var.auth0_issuer != "" ? "JWT" : null
+  authorizer_id      = var.auth0_issuer != "" ? aws_apigatewayv2_authorizer.auth0[0].id : null
 }
 
 resource "aws_apigatewayv2_stage" "default" {
@@ -69,8 +70,9 @@ resource "aws_apigatewayv2_stage" "default" {
   auto_deploy = true
 }
 
-# Custom domain
+# Custom domain (only when cert is issued)
 resource "aws_apigatewayv2_domain_name" "api" {
+  count       = var.acm_cert_arn != "" ? 1 : 0
   domain_name = "api.${var.domain}"
 
   domain_name_configuration {
@@ -81,8 +83,9 @@ resource "aws_apigatewayv2_domain_name" "api" {
 }
 
 resource "aws_apigatewayv2_api_mapping" "api" {
+  count       = var.acm_cert_arn != "" ? 1 : 0
   api_id      = aws_apigatewayv2_api.main.id
-  domain_name = aws_apigatewayv2_domain_name.api.id
+  domain_name = aws_apigatewayv2_domain_name.api[0].id
   stage       = aws_apigatewayv2_stage.default.id
 }
 
