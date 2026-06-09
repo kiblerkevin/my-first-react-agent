@@ -158,10 +158,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ needs.detect-environment.outputs.environment }}
-          path: ${{ env.WORKING_DIR }}
+          path: artifact
 
-      - name: Restore placeholder zip
-        run: mv ${{ env.WORKING_DIR }}/lambda-placeholder.zip /tmp/lambda-placeholder.zip
+      - name: Restore artifacts
+        run: |
+          find artifact -name '*.zip' -exec cp {} /tmp/lambda-placeholder.zip \;
+          find artifact -name 'tfplan' -exec cp {} ${{ env.WORKING_DIR }}/tfplan \;
 
       - name: Initialize
         working-directory: ${{ env.WORKING_DIR }}
