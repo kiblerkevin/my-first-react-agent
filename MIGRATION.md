@@ -3380,44 +3380,43 @@ resource "aws_iam_role_policy_attachment" "github_actions" {
 
 ---
 
-### Phase 0: Bootstrap
+### Phase 0: Bootstrap ✅
 
 Manual one-time setup before OpenTofu can run:
 
-- [ ] Create AWS account (or use existing)
-- [ ] Create S3 bucket for Tofu state: `chicago-sports-recap-tfstate`
-- [ ] Create DynamoDB table for Tofu lock: `chicago-sports-recap-tflock`
-- [ ] Create GitHub OIDC provider + IAM role (see Section 12)
-- [ ] Store `AWS_ROLE_ARN` in GitHub Secrets
-- [ ] Request ACM certificates in `us-east-1` for:
+- [x] Create AWS account (or use existing)
+- [x] Create S3 bucket for Tofu state: `chicago-sports-recap-tfstate`
+- [x] Create DynamoDB table for Tofu lock: `chicago-sports-recap-tflock`
+- [x] Create GitHub OIDC provider + IAM role (see Section 12)
+- [x] Store `AWS_ROLE_ARN` in GitHub Secrets
+- [x] Request ACM certificates in `us-east-1` for:
   - `dashboard.chicagosportsrecap.com`
   - `api.chicagosportsrecap.com`
-- [ ] Add DNS validation CNAME records in Cloudflare
-- [ ] Wait for certificate validation (usually < 30 minutes)
-- [ ] Store certificate ARNs in GitHub Secrets
-- [ ] Create Langfuse Cloud account + project, copy keys
-- [ ] Assemble `APP_SECRETS_JSON` and store in GitHub Secrets
-- [ ] Create Auth0 SPA Application (see Section 7), note the client ID
+- [x] Add DNS validation CNAME records in Cloudflare
+- [x] Wait for certificate validation (usually < 30 minutes)
+- [x] Store certificate ARNs in GitHub Secrets
+- [x] Create Langfuse Cloud account + project, copy keys
+- [x] Assemble `APP_SECRETS_JSON` and store in GitHub Secrets
+- [x] Create Auth0 SPA Application (see Section 7), note the client ID
 
 ---
 
-### Phase 1: Infrastructure Provisioning
+### Phase 1: Infrastructure Provisioning ✅
 
 Run via GitHub Actions (`tofu-apply.yml`) or locally for first run:
 
-- [ ] `tofu init` + `tofu apply` in `infra/environments/prod/`
-- [ ] Verify resources created:
+- [x] `tofu init` + `tofu apply` in `infra/environments/prod/`
+- [x] Verify resources created:
   - Secrets Manager secret exists
   - S3 buckets created (frontend + artifacts)
-  - Database provisioned (Aurora cluster healthy OR DynamoDB tables active)
-  - Lambda functions created (all 11)
-  - Lambda layer published
+  - Database provisioned (DynamoDB tables active)
+  - Lambda functions created (placeholder)
+  - Lambda layer published (placeholder)
   - Step Functions state machine created
   - EventBridge rules created (disabled initially)
   - API Gateway deployed with custom domain
   - CloudFront distribution deployed
   - SES email identity verified
-- [ ] If Aurora path: verify Lambda can connect to database (test invoke `csr-workflow-fetch-scores` with empty event)
 - [ ] If DynamoDB path: verify Lambda can read/write tables
 
 ---

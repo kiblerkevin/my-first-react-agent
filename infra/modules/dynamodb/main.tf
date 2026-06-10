@@ -205,3 +205,198 @@ resource "aws_dynamodb_table" "oauth_tokens" {
     enabled = true
   }
 }
+
+resource "aws_dynamodb_table" "evaluations" {
+  name         = "${var.prefix}-evaluations"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "summary_id"
+    type = "S"
+  }
+
+  attribute {
+    name = "criterion"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "summary_id-criterion-index"
+    hash_key        = "summary_id"
+    range_key       = "criterion"
+    projection_type = "ALL"
+  }
+
+  deletion_protection_enabled = var.deletion_protection
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "summary_stats" {
+  name         = "${var.prefix}-summary-stats"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "workflow_run_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "workflow_run_id-index"
+    hash_key        = "workflow_run_id"
+    projection_type = "ALL"
+  }
+
+  deletion_protection_enabled = var.deletion_protection
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "api_call_results" {
+  name         = "${var.prefix}-api-call-results"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "workflow_run_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "workflow_run_id-index"
+    hash_key        = "workflow_run_id"
+    projection_type = "ALL"
+  }
+
+  deletion_protection_enabled = var.deletion_protection
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "categories" {
+  name         = "${var.prefix}-categories"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "name"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "name-index"
+    hash_key        = "name"
+    projection_type = "ALL"
+  }
+
+  deletion_protection_enabled = var.deletion_protection
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "tags" {
+  name         = "${var.prefix}-tags"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "name"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "name-index"
+    hash_key        = "name"
+    projection_type = "ALL"
+  }
+
+  deletion_protection_enabled = var.deletion_protection
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "summary_tags" {
+  name         = "${var.prefix}-summary-tags"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "summary_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "summary_id-index"
+    hash_key        = "summary_id"
+    projection_type = "ALL"
+  }
+
+  deletion_protection_enabled = var.deletion_protection
+  point_in_time_recovery {
+    enabled = true
+  }
+}
+
+resource "aws_dynamodb_table" "improvement_suggestions" {
+  name         = "${var.prefix}-improvement-suggestions"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "summary_id"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "summary_id-index"
+    hash_key        = "summary_id"
+    projection_type = "ALL"
+  }
+
+  deletion_protection_enabled = var.deletion_protection
+  point_in_time_recovery {
+    enabled = true
+  }
+}
