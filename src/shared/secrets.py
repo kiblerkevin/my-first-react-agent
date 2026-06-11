@@ -15,10 +15,10 @@ def _load_secrets() -> dict[str, str]:
     global _cache
     if _cache is not None:
         return _cache
-    secret_arn = os.environ.get("SECRET_ARN", "")
-    client = boto3.client("secretsmanager")
+    secret_arn = os.environ.get('SECRET_ARN', '')
+    client = boto3.client('secretsmanager')
     response = client.get_secret_value(SecretId=secret_arn)
-    _cache = json.loads(response["SecretString"])
+    _cache = json.loads(response['SecretString'])
     return _cache
 
 

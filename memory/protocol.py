@@ -48,7 +48,9 @@ class MemoryProtocol(ABC):
         """Get the database identifier for a workflow run."""
 
     @abstractmethod
-    def save_checkpoint(self, run_id: str, step_name: str, data: dict[str, Any]) -> None:
+    def save_checkpoint(
+        self, run_id: str, step_name: str, data: dict[str, Any]
+    ) -> None:
         """Save checkpoint data for a workflow step."""
 
     @abstractmethod
@@ -67,7 +69,9 @@ class MemoryProtocol(ABC):
         """Save the result of an API call for a workflow run."""
 
     @abstractmethod
-    def save_summary_stats(self, workflow_run_id: str, stats: list[dict[str, Any]]) -> None:
+    def save_summary_stats(
+        self, workflow_run_id: str, stats: list[dict[str, Any]]
+    ) -> None:
         """Save per-team summarization statistics for a workflow run."""
 
     @abstractmethod
