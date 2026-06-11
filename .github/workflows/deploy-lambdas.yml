@@ -1,0 +1,134 @@
+name: Deploy Lambdas
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'agent/**'
+      - 'memory/**'
+      - 'tools/**'
+      - 'utils/**'
+      - 'models/**'
+      - 'prompts/**'
+      - 'constants/**'
+      - 'requirements.txt'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-west-1
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  detect-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      prefix: ${{ steps.set-env.outputs.prefix }}
+    steps:
+      - id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+            echo "prefix=chicago-sports-recap-${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=dev" >> "$GITHUB_OUTPUT"
+            echo "prefix=chicago-sports-recap-dev" >> "$GITHUB_OUTPUT"
+          fi
+
+  deploy:
+    needs: detect-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.detect-environment.outputs.environment }}
+    env:
+      PREFIX: ${{ needs.detect-environment.outputs.prefix }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build Lambda Layer
+        run: |
+          mkdir -p build/layer/python
+          pip install \
+            anthropic pydantic boto3 requests beautifulsoup4 \
+            rapidfuzz langfuse google-genai itsdangerous PyYAML \
+            -t build/layer/python/ --quiet
+          # Copy application code into layer
+          cp -r agent/ memory/ tools/ utils/ models/ prompts/ constants/ src/ build/layer/python/
+          cd build/layer && zip -r ../layer.zip python/ -x '*.pyc' '*__pycache__*'
+          echo "Layer size: $(du -sh ../layer.zip | cut -f1)"
+
+      - name: Publish Lambda Layer
+        run: |
+          LAYER_ARN=$(aws lambda publish-layer-version \
+            --layer-name "${PREFIX}-deps" \
+            --zip-file fileb://build/layer.zip \
+            --compatible-runtimes python3.12 \
+            --description "Shared dependencies and application code" \
+            --query 'LayerVersionArn' --output text)
+          echo "LAYER_ARN=$LAYER_ARN" >> $GITHUB_ENV
+          echo "Published layer: $LAYER_ARN"
+
+      - name: Deploy Lambda Functions
+        run: |
+          declare -A HANDLER_MAP=(
+            ["fetch-scores"]="src/handlers/fetch_scores.py"
+            ["fetch-articles"]="src/handlers/fetch_articles.py"
+            ["deduplicate-articles"]="src/handlers/deduplicate_articles.py"
+            ["summarize-articles"]="src/handlers/summarize_articles.py"
+            ["create-blog-draft"]="src/handlers/create_blog_draft.py"
+            ["create-taxonomy"]="src/handlers/create_taxonomy.py"
+            ["send-approval-email"]="src/handlers/send_approval_email.py"
+            ["housekeeping"]="src/handlers/housekeeping.py"
+            ["api-handler"]="src/handlers/api_handler.py"
+          )
+
+          for func_suffix in "${!HANDLER_MAP[@]}"; do
+            FUNC_NAME="${PREFIX}-${func_suffix}"
+            HANDLER_FILE="${HANDLER_MAP[$func_suffix]}"
+            HANDLER_MODULE=$(echo "$HANDLER_FILE" | sed 's|/|.|g' | sed 's|\.py$||')
+
+            echo "Deploying ${FUNC_NAME}..."
+            mkdir -p "build/functions/${func_suffix}"
+            cp "$HANDLER_FILE" "build/functions/${func_suffix}/handler.py"
+            cd "build/functions/${func_suffix}"
+            zip -j "../${func_suffix}.zip" handler.py
+            cd ../../..
+
+            aws lambda update-function-code \
+              --function-name "$FUNC_NAME" \
+              --zip-file "fileb://build/functions/${func_suffix}.zip" \
+              --no-cli-pager
+
+            aws lambda wait function-updated --function-name "$FUNC_NAME"
+
+            aws lambda update-function-configuration \
+              --function-name "$FUNC_NAME" \
+              --layers "${{ env.LAYER_ARN }}" \
+              --handler "handler.handler" \
+              --no-cli-pager
+
+            aws lambda wait function-updated --function-name "$FUNC_NAME"
+          done
+          echo "All Lambda functions deployed."

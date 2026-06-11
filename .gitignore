@@ -219,3 +219,6 @@ logs/
 # Tailwind CSS
 tools/bin/
 server/static/css/output.css
+
+# Migration exports
+data/export/

@@ -17,7 +17,7 @@ locals {
       memory_size = 512
     }
     "create-blog-draft" = {
-      timeout     = 300
+      timeout     = 900
       memory_size = 512
     }
     "create-taxonomy" = {

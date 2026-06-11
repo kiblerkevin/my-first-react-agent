@@ -4,6 +4,7 @@ Idempotent: PutItem overwrites by primary key, so re-running is safe.
 
 Usage:
     python scripts/migration/load_dynamodb.py --export-dir data/export --region us-east-2
+    python scripts/migration/load_dynamodb.py --export-dir data/export --dev
     python scripts/migration/load_dynamodb.py --export-dir data/export --tables articles workflow_runs
     python scripts/migration/load_dynamodb.py --export-dir data/export --dry-run
 """
@@ -15,6 +16,9 @@ from decimal import Decimal
 from pathlib import Path
 
 import boto3
+
+PREFIX_PROD = "chicago-sports-recap-prod"
+PREFIX_DEV = "chicago-sports-recap-dev"
 
 # Maps JSON filename (without .json) to DynamoDB table name suffix and primary key field(s).
 TABLE_CONFIG = {
@@ -40,23 +44,28 @@ STRING_COERCE_FIELDS = {
 }
 
 
+def convert_value(value, key: str | None = None):
+    """Recursively convert a value to DynamoDB-compatible types."""
+    if value is None:
+        return None
+    if key and key in STRING_COERCE_FIELDS:
+        return str(value)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, int):
+        return Decimal(str(value))
+    if isinstance(value, dict):
+        return {k: v for k, v in ((k, convert_value(v)) for k, v in value.items()) if v is not None}
+    if isinstance(value, list):
+        return [convert_value(item) for item in value]
+    return value
+
+
 def convert_item(item: dict) -> dict:
     """Convert a JSON record to DynamoDB-compatible types."""
-    converted = {}
-    for key, value in item.items():
-        if value is None:
-            continue
-        if key in STRING_COERCE_FIELDS:
-            converted[key] = str(value)
-        elif isinstance(value, float):
-            converted[key] = Decimal(str(value))
-        elif isinstance(value, bool):
-            converted[key] = value
-        elif isinstance(value, int):
-            converted[key] = Decimal(str(value))
-        else:
-            converted[key] = value
-    return converted
+    return {k: v for k, v in ((k, convert_value(v, k)) for k, v in item.items()) if v is not None}
 
 
 def load_table(
@@ -68,7 +77,6 @@ def load_table(
 ) -> int:
     """Batch write items to a DynamoDB table. Returns count written."""
     if dry_run:
-        # Validate all items have the primary key
         missing_pk = [i for i, item in enumerate(items) if not item.get(pk_field)]
         if missing_pk:
             print(f"  ERROR: {len(missing_pk)} items missing PK '{pk_field}' at indices: {missing_pk[:5]}")
@@ -96,17 +104,19 @@ def load_table(
 def main():
     parser = argparse.ArgumentParser(description="Load JSON exports into DynamoDB")
     parser.add_argument("--export-dir", required=True, help="Path to directory containing JSON export files")
-    parser.add_argument("--prefix", default="csr", help="DynamoDB table name prefix (default: csr)")
+    parser.add_argument("--dev", action="store_true", help="Load into dev tables (chicago-sports-recap-dev-*)")
     parser.add_argument("--region", default="us-east-2", help="AWS region (default: us-east-2)")
     parser.add_argument("--tables", nargs="*", help="Only load specific tables (space-separated)")
     parser.add_argument("--dry-run", action="store_true", help="Validate without writing")
     args = parser.parse_args()
 
+    prefix = PREFIX_DEV if args.dev else PREFIX_PROD
     export_dir = Path(args.export_dir)
     if not export_dir.is_dir():
         print(f"ERROR: Export directory not found: {export_dir}")
         sys.exit(1)
 
+    print(f"Target: {prefix}-* tables in {args.region}")
     dynamodb = boto3.resource("dynamodb", region_name=args.region)
 
     tables_to_load = args.tables if args.tables else list(TABLE_CONFIG.keys())
@@ -124,7 +134,7 @@ def main():
             print(f"SKIP: {json_file} not found")
             continue
 
-        table_name = f"{args.prefix}-{config['suffix']}"
+        table_name = f"{prefix}-{config['suffix']}"
         print(f"\nLoading {table_key} -> {table_name}")
 
         with open(json_file) as f:
