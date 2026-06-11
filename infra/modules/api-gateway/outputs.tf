@@ -10,5 +10,5 @@ output "api_id" {
 
 output "custom_domain_target" {
   description = "Target domain name for Cloudflare CNAME"
-  value       = aws_apigatewayv2_domain_name.api.domain_name_configuration[0].target_domain_name
+  value       = var.acm_cert_arn != "" ? aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0].target_domain_name : ""
 }

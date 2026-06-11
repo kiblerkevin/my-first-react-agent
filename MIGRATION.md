@@ -3380,44 +3380,43 @@ resource "aws_iam_role_policy_attachment" "github_actions" {
 
 ---
 
-### Phase 0: Bootstrap
+### Phase 0: Bootstrap ✅
 
 Manual one-time setup before OpenTofu can run:
 
-- [ ] Create AWS account (or use existing)
-- [ ] Create S3 bucket for Tofu state: `chicago-sports-recap-tfstate`
-- [ ] Create DynamoDB table for Tofu lock: `chicago-sports-recap-tflock`
-- [ ] Create GitHub OIDC provider + IAM role (see Section 12)
-- [ ] Store `AWS_ROLE_ARN` in GitHub Secrets
-- [ ] Request ACM certificates in `us-east-1` for:
+- [x] Create AWS account (or use existing)
+- [x] Create S3 bucket for Tofu state: `chicago-sports-recap-tfstate`
+- [x] Create DynamoDB table for Tofu lock: `chicago-sports-recap-tflock`
+- [x] Create GitHub OIDC provider + IAM role (see Section 12)
+- [x] Store `AWS_ROLE_ARN` in GitHub Secrets
+- [x] Request ACM certificates in `us-east-1` for:
   - `dashboard.chicagosportsrecap.com`
   - `api.chicagosportsrecap.com`
-- [ ] Add DNS validation CNAME records in Cloudflare
-- [ ] Wait for certificate validation (usually < 30 minutes)
-- [ ] Store certificate ARNs in GitHub Secrets
-- [ ] Create Langfuse Cloud account + project, copy keys
-- [ ] Assemble `APP_SECRETS_JSON` and store in GitHub Secrets
-- [ ] Create Auth0 SPA Application (see Section 7), note the client ID
+- [x] Add DNS validation CNAME records in Cloudflare
+- [x] Wait for certificate validation (usually < 30 minutes)
+- [x] Store certificate ARNs in GitHub Secrets
+- [x] Create Langfuse Cloud account + project, copy keys
+- [x] Assemble `APP_SECRETS_JSON` and store in GitHub Secrets
+- [x] Create Auth0 SPA Application (see Section 7), note the client ID
 
 ---
 
-### Phase 1: Infrastructure Provisioning
+### Phase 1: Infrastructure Provisioning ✅
 
 Run via GitHub Actions (`tofu-apply.yml`) or locally for first run:
 
-- [ ] `tofu init` + `tofu apply` in `infra/environments/prod/`
-- [ ] Verify resources created:
+- [x] `tofu init` + `tofu apply` in `infra/environments/prod/`
+- [x] Verify resources created:
   - Secrets Manager secret exists
   - S3 buckets created (frontend + artifacts)
-  - Database provisioned (Aurora cluster healthy OR DynamoDB tables active)
-  - Lambda functions created (all 11)
-  - Lambda layer published
+  - Database provisioned (DynamoDB tables active)
+  - Lambda functions created (placeholder)
+  - Lambda layer published (placeholder)
   - Step Functions state machine created
   - EventBridge rules created (disabled initially)
   - API Gateway deployed with custom domain
   - CloudFront distribution deployed
   - SES email identity verified
-- [ ] If Aurora path: verify Lambda can connect to database (test invoke `csr-workflow-fetch-scores` with empty event)
 - [ ] If DynamoDB path: verify Lambda can read/write tables
 
 ---
@@ -3461,6 +3460,98 @@ Test the Step Functions workflow end-to-end without affecting production:
 - [ ] If any state fails: check CloudWatch logs, fix, re-run
 - [ ] Enable EventBridge daily rule (but keep local system running in parallel)
 - [ ] Next morning: confirm scheduled execution succeeds
+
+---
+
+### Phase 3 Execution Plan (Dev Environment)
+
+#### Architecture Changes
+
+| Concern | Current (local) | Lambda Target |
+|---|---|---|
+| Database | SQLite via SQLAlchemy `Memory()` | DynamoDB via `boto3` |
+| Config | YAML files on disk | Environment variables + Secrets Manager |
+| Secrets | macOS Keychain / `.env` | AWS Secrets Manager |
+| Orchestration | `daily_workflow.py` in-process | Step Functions passes state between Lambdas |
+| Checkpointing | SQLite `checkpoint_data` column | DynamoDB intermediate state (referenced by `run_id`) |
+| Email | SMTP (Gmail) | SES |
+
+#### Step Functions State Pattern
+
+Uses **ResultSelector + ResultPath** to accumulate lightweight metadata between states. Bulk data (articles, summaries, drafts) is written to/read from DynamoDB by each Lambda using `run_id`.
+
+```json
+{
+  "run_id": "...",
+  "max_articles_per_team": 2,
+  "fetchScores": { "score_count": 3 },
+  "fetchArticles": { "new_article_count": 103 },
+  "deduplicateArticles": { "unique_count": 95 },
+  "summarizeArticles": { "relevant_count": 9 },
+  "createBlogDraft": { "title": "...", "overall_score": 8.75, "summary_id": "52" },
+  "createTaxonomy": { "category_count": 8, "tag_count": 11 },
+  "sendApprovalEmail": { "email_sent": true, "token": "..." },
+  "housekeeping": { "status": "success" }
+}
+```
+
+#### Execution Steps
+
+| Step | Work | Depends On |
+|---|---|---|
+| 1 | Define `memory/protocol.py` — MemoryProtocol ABC | — |
+| 2 | Build `src/shared/` — DynamoMemory, secrets, config | Step 1 |
+| 3 | Build `src/handlers/` — 9 Lambda handlers | Steps 1-2 |
+| 4 | Update Terraform — timeout (900s for draft), env vars, Step Functions definition | — |
+| 5 | Update `.github/workflows/deploy-lambdas.yml` — CI/CD for Lambda packaging | — |
+| 6 | Test — manual Step Functions execution in dev | Steps 3-5 |
+
+#### Source Directory Structure
+
+```
+src/
+├── shared/
+│   ├── __init__.py
+│   ├── config.py              # Reads TABLE_PREFIX, ENVIRONMENT, env vars
+│   ├── secrets.py             # Secrets Manager client (cached at cold start)
+│   └── dynamo_memory.py       # DynamoDB MemoryProtocol implementation
+├── handlers/
+│   ├── fetch_scores.py
+│   ├── fetch_articles.py
+│   ├── deduplicate_articles.py
+│   ├── summarize_articles.py
+│   ├── create_blog_draft.py   # Includes full revision loop (900s timeout)
+│   ├── create_taxonomy.py
+│   ├── send_approval_email.py # Uses SES (not SMTP)
+│   ├── housekeeping.py
+│   └── api_handler.py
+└── __init__.py
+```
+
+#### Memory Layer: Protocol + DynamoDB Implementation
+
+- `memory/protocol.py` — ABC defining every method used by tools/workflow
+- `src/shared/dynamo_memory.py` — implements protocol against DynamoDB
+- Existing `memory/memory.py` (SQLite) unchanged for local system
+- Backend selected via `MEMORY_BACKEND` env var (`dynamo` in Lambda, `sqlite` locally)
+
+#### Config Mapping (YAML → Env Vars / Secrets Manager)
+
+| Source | Target | Type |
+|---|---|---|
+| `sources.yaml` → ESPN teams, relevance scoring, teams list | Bundled as constants in handler code | Static |
+| `sources.yaml` → `collection.*` | `MAX_ARTICLES_PER_SOURCE`, `LOOKBACK_HOURS` | Env var |
+| `llms.yaml` → model names | `LLM_SUMMARIZER_MODEL`, `LLM_DRAFTER_MODEL`, `LLM_EVALUATOR_MODEL`, `LLM_ORCHESTRATOR_MODEL` | Env var |
+| `llms.yaml` → fallback models | `LLM_FALLBACK_MODEL`, `LLM_FALLBACK_PRO_MODEL` | Env var |
+| `orchestration.yaml` → revision loop | `REVISION_MAX_TOOL_CALLS`, `REVISION_CRITERION_FLOORS` | Env var |
+| `orchestration.yaml` → approval | `APPROVAL_EXPIRY_HOURS` | Env var |
+| API keys, Langfuse keys, approval secret | Secrets Manager JSON blob | Secret |
+
+#### Terraform Updates Required
+
+- `create-blog-draft` Lambda timeout → 900s
+- Add all env vars to Lambda module `environment_variables`
+- Update Step Functions definition to use `ResultSelector` + `ResultPath`
 
 ---
 

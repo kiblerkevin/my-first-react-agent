@@ -24,8 +24,9 @@ variable "spa_bucket_regional_domain_name" {
 }
 
 variable "acm_cert_arn" {
-  description = "ACM certificate ARN (us-east-1)"
+  description = "ACM certificate ARN (us-east-1). Empty string to skip distribution."
   type        = string
+  default     = ""
 }
 
 variable "waf_web_acl_arn" {

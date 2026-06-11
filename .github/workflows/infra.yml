@@ -111,7 +111,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: tfplan-${{ needs.detect-environment.outputs.environment }}
-          path: ${{ env.WORKING_DIR }}/tfplan
+          path: |
+            ${{ env.WORKING_DIR }}/tfplan
+            /tmp/lambda-placeholder.zip
           retention-days: 5
 
       - name: Comment plan on PR
@@ -156,7 +158,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tfplan-${{ needs.detect-environment.outputs.environment }}
-          path: ${{ env.WORKING_DIR }}
+          path: artifact
+
+      - name: Restore artifacts
+        run: |
+          find artifact -name '*.zip' -exec cp {} /tmp/lambda-placeholder.zip \;
+          find artifact -name 'tfplan' -exec cp {} ${{ env.WORKING_DIR }}/tfplan \;
 
       - name: Initialize
         working-directory: ${{ env.WORKING_DIR }}

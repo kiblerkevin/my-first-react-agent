@@ -25,9 +25,10 @@ module "ses" {
 module "acm" {
   source = "./modules/acm"
 
-  domain     = var.domain
-  prefix     = local.prefix
-  aws_region = var.aws_region
+  domain              = var.domain
+  prefix              = local.prefix
+  aws_region          = var.aws_region
+  wait_for_validation = var.acm_wait_for_validation
 
   providers = {
     aws           = aws
@@ -54,9 +55,31 @@ module "lambda" {
   secret_arn         = module.secrets_manager.secret_arn
   log_retention_days = var.lambda_log_retention_days
   environment_variables = {
-    ENVIRONMENT  = var.environment
-    SECRET_ARN   = module.secrets_manager.secret_arn
-    TABLE_PREFIX = local.prefix
+    ENVIRONMENT                  = var.environment
+    SECRET_ARN                   = module.secrets_manager.secret_arn
+    TABLE_PREFIX                 = local.prefix
+    MAX_ARTICLES_PER_SOURCE      = "100"
+    LOOKBACK_HOURS               = "24"
+    LLM_SUMMARIZER_MODEL         = "claude-haiku-4-5"
+    LLM_SUMMARIZER_TEMPERATURE   = "0.1"
+    LLM_SUMMARIZER_MAX_TOKENS    = "512"
+    LLM_DRAFTER_MODEL            = "claude-sonnet-4-5"
+    LLM_DRAFTER_TEMPERATURE      = "0.5"
+    LLM_DRAFTER_MAX_TOKENS       = "4096"
+    LLM_EVALUATOR_MODEL          = "claude-sonnet-4-5"
+    LLM_EVALUATOR_TEMPERATURE    = "0.1"
+    LLM_EVALUATOR_MAX_TOKENS     = "2048"
+    LLM_ORCHESTRATOR_MODEL       = "claude-sonnet-4-5"
+    LLM_ORCHESTRATOR_TEMPERATURE = "0.2"
+    LLM_ORCHESTRATOR_MAX_TOKENS  = "4096"
+    LLM_FALLBACK_MODEL           = "gemini-2.5-flash"
+    LLM_FALLBACK_PRO_MODEL       = "gemini-2.5-pro"
+    REVISION_MAX_TOOL_CALLS      = "6"
+    REVISION_CRITERION_FLOORS    = jsonencode({ accuracy = 8.0, completeness = 7.0, readability = 7.0, seo = 6.0 })
+    APPROVAL_EXPIRY_HOURS        = "24"
+    RATE_LIMIT_MAX_RETRIES       = "3"
+    RATE_LIMIT_BASE_DELAY        = "1.0"
+    LANGFUSE_HOST                = "https://cloud.langfuse.com"
   }
 }
 

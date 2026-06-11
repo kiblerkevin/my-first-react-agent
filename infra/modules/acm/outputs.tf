@@ -1,11 +1,11 @@
 output "cloudfront_cert_arn" {
-  description = "ACM certificate ARN for CloudFront (us-east-1)"
-  value       = aws_acm_certificate.cloudfront.arn
+  description = "ACM certificate ARN for CloudFront (us-east-1), empty if not yet validated"
+  value       = var.wait_for_validation ? aws_acm_certificate.cloudfront.arn : ""
 }
 
 output "regional_cert_arn" {
-  description = "ACM certificate ARN for API Gateway (regional)"
-  value       = aws_acm_certificate.regional.arn
+  description = "ACM certificate ARN for API Gateway (regional), empty if not yet validated"
+  value       = var.wait_for_validation ? aws_acm_certificate.regional.arn : ""
 }
 
 output "validation_records" {
