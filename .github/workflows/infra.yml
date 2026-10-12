@@ -23,6 +23,7 @@ on:
         options:
           - plan
           - apply
+          - destroy
 
 permissions:
   id-token: write
@@ -172,3 +173,31 @@ jobs:
       - name: Apply
         working-directory: ${{ env.WORKING_DIR }}
         run: tofu apply -auto-approve tfplan
+
+  destroy:
+    needs: [detect-environment]
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'destroy'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.detect-environment.outputs.environment }}
+    env:
+      TF_VAR_FILE: environments/${{ needs.detect-environment.outputs.environment }}.tfvars
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: ${{ env.TOFU_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: us-west-1
+
+      - name: Initialize
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu init
+
+      - name: Destroy
+        working-directory: ${{ env.WORKING_DIR }}
+        run: tofu destroy -var-file="${{ env.TF_VAR_FILE }}" -auto-approve
